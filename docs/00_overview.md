@@ -63,6 +63,14 @@ See [`schemas/README.md`](../schemas/README.md) for detailed schema documentatio
    - Profile: `apps`
    - See: `docs/30_enrichment.md`
 
+### Tools (Phase 1.6)
+
+9. **replayer** - Replay/Backfill tool
+   - Purpose: Republish raw events from MinIO to Kafka for reproducibility testing and backfilling
+   - Profile: `tools` (on-demand, not a daemon)
+   - Usage: `docker compose --profile tools run --rm replayer <args>`
+   - See: `docs/40_replay_backfill.md`
+
 ## Data Flow (Target Architecture)
 
 The platform is designed to handle the following data flow:
@@ -165,7 +173,7 @@ This Phase 1 infrastructure is ready for:
 - Stream processing applications (real-time aggregations, alerts)
 - Observability stack (Prometheus, Grafana) - Phase 1.2 (optional)
 
-Current implementation (Phase 1 + 1.5):
+Current implementation (Phase 1 + 1.5 + 1.6):
 - ✅ RSS feed ingestion
 - ✅ Reddit feed ingestion
 - ✅ Market data ingestion (TimescaleDB)
@@ -174,6 +182,7 @@ Current implementation (Phase 1 + 1.5):
 - ✅ Dead Letter Queue for error handling
 - ✅ Contract-first with versioned schemas
 - ✅ Observability with Prometheus and Grafana
+- ✅ Replay & Backfill capability (MinIO → Kafka)
 
 ## Design Principles
 
