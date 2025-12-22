@@ -15,6 +15,7 @@ import hashlib
 import sqlite3
 import signal
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread, Event
@@ -28,6 +29,7 @@ from kafka.errors import KafkaError
 import jsonschema
 from jsonschema import Draft202012Validator
 from langdetect import detect, LangDetectException
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Configure logging
 logging.basicConfig(
@@ -51,6 +53,8 @@ DEDUP_DB_PATH = os.getenv('DEDUP_DB_PATH', '/data/dedup.db')
 PIPELINE_VERSION = os.getenv('PIPELINE_VERSION', 'normalizer.v1.0')
 
 # Global state
+# Note: These globals are safe as consume_loop processes events sequentially
+# and health_server only reads them
 shutdown_event = Event()
 is_healthy = False
 stats = {
@@ -59,6 +63,18 @@ stats = {
     'dlq_count': 0,
     'errors': 0
 }
+last_success_timestamp = time.time()  # Initialize to current time to avoid large initial value
+
+# Prometheus metrics
+metrics_raw_events_consumed = Counter('normalizer_raw_events_consumed_total', 'Total raw events consumed from Kafka')
+metrics_normalized_events_published = Counter('normalizer_normalized_events_published_total', 'Total normalized events published')
+metrics_events_failed = Counter('normalizer_events_failed_total', 'Total events that failed processing', ['stage'])
+metrics_dlq_published = Counter('normalizer_dlq_published_total', 'Total events sent to DLQ')
+metrics_dedup_hits = Counter('normalizer_dedup_hits_total', 'Total duplicate events detected')
+metrics_processing_duration = Histogram('normalizer_processing_duration_seconds', 'Duration of event processing end-to-end')
+metrics_minio_get_duration = Histogram('normalizer_minio_get_duration_seconds', 'Duration of MinIO get operations')
+metrics_kafka_produce_duration = Histogram('normalizer_kafka_produce_duration_seconds', 'Duration of Kafka produce operations')
+metrics_last_success = Gauge('normalizer_last_success_timestamp', 'Timestamp of last successful event processing')
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -81,6 +97,11 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'unhealthy'}).encode())
+        elif self.path == '/metrics':
+            self.send_response(200)
+            self.send_header('Content-Type', CONTENT_TYPE_LATEST)
+            self.end_headers()
+            self.wfile.write(generate_latest())
         else:
             self.send_response(404)
             self.end_headers()
@@ -175,6 +196,7 @@ def create_s3_client():
 def download_from_minio(s3_client, s3_uri: str) -> Optional[dict]:
     """Download and parse JSON content from MinIO."""
     try:
+        start_time = time.time()
         # Parse S3 URI: s3://bucket/key
         parts = s3_uri.replace('s3://', '').split('/', 1)
         if len(parts) != 2:
@@ -184,6 +206,7 @@ def download_from_minio(s3_client, s3_uri: str) -> Optional[dict]:
         
         response = s3_client.get_object(Bucket=bucket, Key=key)
         content = response['Body'].read().decode('utf-8')
+        metrics_minio_get_duration.observe(time.time() - start_time)
         
         logger.debug(json.dumps({
             'message': 'Downloaded from MinIO',
@@ -194,6 +217,7 @@ def download_from_minio(s3_client, s3_uri: str) -> Optional[dict]:
         return json.loads(content)
         
     except ClientError as e:
+        metrics_events_failed.labels(stage='download').inc()
         logger.error(json.dumps({
             'message': 'Failed to download from MinIO',
             'uri': s3_uri,
@@ -201,6 +225,7 @@ def download_from_minio(s3_client, s3_uri: str) -> Optional[dict]:
         }))
         return None
     except json.JSONDecodeError as e:
+        metrics_events_failed.labels(stage='parse').inc()
         logger.error(json.dumps({
             'message': 'Invalid JSON in raw content',
             'uri': s3_uri,
@@ -208,6 +233,7 @@ def download_from_minio(s3_client, s3_uri: str) -> Optional[dict]:
         }))
         return None
     except Exception as e:
+        metrics_events_failed.labels(stage='download').inc()
         logger.error(json.dumps({
             'message': 'Unexpected error downloading from MinIO',
             'uri': s3_uri,
@@ -315,6 +341,7 @@ def send_to_dlq(
         }
         
         producer.send(KAFKA_TOPIC_DLQ, value=dlq_event)
+        metrics_dlq_published.inc()
         
         logger.warning(json.dumps({
             'message': 'Sent to DLQ',
@@ -341,17 +368,23 @@ def process_raw_event(
     db_path: str
 ) -> bool:
     """Process a single raw event."""
+    global last_success_timestamp
     event_id = raw_event.get('event_id', 'unknown')
+    start_time = time.time()
     
     try:
+        metrics_raw_events_consumed.inc()
+        
         # Validate raw event schema
         if not validate_event(raw_event, raw_schema):
+            metrics_events_failed.labels(stage='schema').inc()
             send_to_dlq(producer, raw_event, 'schema_validation_error', 'Invalid raw event schema', 'validation')
             return False
         
         # Download raw content from MinIO
         raw_uri = raw_event.get('raw_uri')
         if not raw_uri:
+            metrics_events_failed.labels(stage='download').inc()
             send_to_dlq(producer, raw_event, 'missing_field', 'Missing raw_uri field', 'download')
             return False
         
@@ -363,6 +396,7 @@ def process_raw_event(
         # Normalize text
         normalized_text = normalize_text(raw_content)
         if not normalized_text:
+            metrics_events_failed.labels(stage='normalize').inc()
             send_to_dlq(producer, raw_event, 'normalization_error', 'Empty normalized text', 'normalization')
             return False
         
@@ -381,6 +415,8 @@ def process_raw_event(
                 'dedup_key': dedup_key
             }))
             stats['dedup_hits'] += 1
+            metrics_dedup_hits.inc()
+            metrics_processing_duration.observe(time.time() - start_time)
             return True  # Not an error, just a duplicate
         
         # Detect language
@@ -430,12 +466,16 @@ def process_raw_event(
         
         # Validate normalized event
         if not validate_event(normalized_event, normalized_schema):
+            metrics_events_failed.labels(stage='schema').inc()
             send_to_dlq(producer, raw_event, 'schema_validation_error', 'Invalid normalized event schema', 'validation')
             return False
         
         # Publish to Kafka
+        produce_start = time.time()
         future = producer.send(KAFKA_TOPIC_NORMALIZED, value=normalized_event)
         future.get(timeout=10)
+        metrics_kafka_produce_duration.observe(time.time() - produce_start)
+        metrics_normalized_events_published.inc()
         
         # Store dedup key
         store_dedup_key(db_path, dedup_key, event_id)
@@ -450,6 +490,9 @@ def process_raw_event(
         }))
         
         stats['processed'] += 1
+        last_success_timestamp = time.time()
+        metrics_last_success.set(last_success_timestamp)
+        metrics_processing_duration.observe(time.time() - start_time)
         return True
         
     except Exception as e:
@@ -459,6 +502,8 @@ def process_raw_event(
             'error': str(e)
         }))
         stats['errors'] += 1
+        metrics_events_failed.labels(stage='processing').inc()
+        metrics_processing_duration.observe(time.time() - start_time)
         send_to_dlq(producer, raw_event, 'processing_error', str(e), 'processing')
         return False
 

@@ -959,6 +959,7 @@ After verifying Phase 1 works:
 3. ✅ Normalizer processing and producing normalized events
 4. ✅ Schemas validated
 5. ✅ End-to-end tracing working
+6. ✅ Observability stack (Prometheus, Grafana) - Phase 1.2 ✅
 
 Future development:
 - Twitter/X API ingestion service
@@ -966,6 +967,462 @@ Future development:
 - Market data ingestion (yfinance, Finnhub)
 - Data enrichment pipeline (symbol validation, sentiment)
 - Stream processing (real-time aggregations)
-- Observability stack (Prometheus, Grafana) - Phase 1.2
 
 See `docs/10_ingestion.md` and `docs/20_normalization.md` for service details.
+
+---
+
+## Observability (Phase 1.2)
+
+### Overview
+
+The observability stack provides comprehensive monitoring of the trading platform pipeline using Prometheus and Grafana. It tracks throughput, latency, error rates, deduplication, and consumer lag.
+
+**Stack Components:**
+- **Prometheus**: Metrics collection and storage
+- **Grafana**: Visualization and dashboards
+- **Kafka Exporter**: Consumer lag metrics for Redpanda
+- **Service /metrics endpoints**: RSS ingestor and normalizer expose Prometheus metrics
+
+### Starting Observability Stack
+
+The observability stack is optional and runs via the `observability` profile:
+
+```bash
+cd infra
+
+# Option 1: Start everything together (recommended)
+docker compose --profile apps --profile observability up -d
+
+# Option 2: Start observability separately
+docker compose --profile infra up -d      # Infrastructure first
+docker compose --profile apps up -d       # Applications second
+docker compose --profile observability up -d  # Observability last
+```
+
+**Note:** Applications work perfectly fine without the observability profile. This is optional for monitoring.
+
+### Access Points
+
+After starting the observability stack:
+
+- **Grafana**: http://localhost:3001
+  - Default credentials: `admin` / `admin`
+  - Dashboard: "Pipeline Health" (auto-provisioned)
+- **Prometheus**: http://localhost:9090
+  - Query UI and target status
+- **Kafka Exporter**: http://localhost:9308/metrics
+  - Consumer lag metrics
+
+### Verifying Observability
+
+#### 1. Check All Services Running
+
+```bash
+docker compose --profile observability ps
+```
+
+Expected output should show `prometheus`, `grafana`, and `kafka-exporter` containers running.
+
+#### 2. Check Metrics Endpoints
+
+```bash
+# RSS Ingestor metrics
+curl -s http://localhost:8001/metrics | head -20
+
+# Normalizer metrics
+curl -s http://localhost:8002/metrics | head -20
+```
+
+Expected: Prometheus-format metrics (lines starting with `# HELP` and metric names).
+
+#### 3. Verify Prometheus Targets
+
+Navigate to http://localhost:9090/targets
+
+Expected: All targets should show status "UP":
+- `rss-ingestor` (1/1 up)
+- `normalizer` (1/1 up)
+- `kafka-exporter` (1/1 up)
+
+#### 4. Access Grafana Dashboard
+
+1. Navigate to http://localhost:3001
+2. Login with `admin` / `admin` (or your configured credentials)
+3. Go to Dashboards → "Pipeline Health"
+4. Wait 1-2 minutes for data to populate
+
+### Available Metrics
+
+#### RSS Ingestor Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rss_ingestor_items_fetched_total` | Counter | Total items fetched from RSS feeds |
+| `rss_ingestor_raw_events_published_total` | Counter | Total raw events published to Kafka |
+| `rss_ingestor_raw_events_failed_total` | Counter | Total failed raw events |
+| `rss_ingestor_dedup_hits_total` | Counter | Total deduplicated items |
+| `rss_ingestor_poll_duration_seconds` | Histogram | RSS feed polling duration |
+| `rss_ingestor_minio_put_duration_seconds` | Histogram | MinIO upload duration |
+| `rss_ingestor_kafka_produce_duration_seconds` | Histogram | Kafka produce duration |
+| `rss_ingestor_last_success_timestamp` | Gauge | Unix timestamp of last successful poll |
+
+#### Normalizer Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `normalizer_raw_events_consumed_total` | Counter | Total raw events consumed |
+| `normalizer_normalized_events_published_total` | Counter | Total normalized events published |
+| `normalizer_events_failed_total{stage}` | Counter | Failed events by stage (download, parse, schema, normalize, produce) |
+| `normalizer_dlq_published_total` | Counter | Total events sent to DLQ |
+| `normalizer_dedup_hits_total` | Counter | Total duplicate events detected |
+| `normalizer_processing_duration_seconds` | Histogram | End-to-end event processing duration |
+| `normalizer_minio_get_duration_seconds` | Histogram | MinIO download duration |
+| `normalizer_kafka_produce_duration_seconds` | Histogram | Kafka produce duration |
+| `normalizer_last_success_timestamp` | Gauge | Unix timestamp of last successful processing |
+
+#### Kafka Consumer Lag Metrics (via kafka-exporter)
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `kafka_consumergroup_lag{consumergroup, topic, partition}` | Gauge | Consumer lag by consumer group, topic, and partition |
+
+### Pipeline Health Dashboard
+
+The "Pipeline Health" dashboard is automatically provisioned and includes:
+
+#### Throughput Panels
+- **Events Per Second**: Raw events published vs normalized events published
+- **Throughput rates** over time
+
+#### DLQ Monitoring
+- **DLQ Events Per Second**: Rate of events sent to dead letter queue
+- **Total DLQ Count**: Cumulative DLQ events (alerts if high)
+
+#### Latency Analysis
+- **Normalizer Processing Latency**: p50, p95, p99 percentiles
+- **RSS Ingestor Latency**: Poll duration and Kafka produce latency (p50, p95)
+
+#### Deduplication Metrics
+- **Deduplication Rate**: Dedup hits per second for both services
+- **Dedup Hit Ratio**: Percentage of duplicate events (0-100%)
+
+#### Consumer Lag
+- **Consumer Lag (normalizer-v1)**: Total lag across all partitions
+- **Consumer Lag by Partition**: Individual partition lags
+
+#### Service Health
+- **Service Status**: UP/DOWN indicators for RSS ingestor and normalizer
+- **Seconds Since Last Success**: Time since last successful operation (alerts if too high)
+
+### Prometheus Queries
+
+You can run custom queries in Prometheus (http://localhost:9090):
+
+#### Throughput Queries
+
+```promql
+# Raw events published per second
+rate(rss_ingestor_raw_events_published_total[1m])
+
+# Normalized events per second
+rate(normalizer_normalized_events_published_total[1m])
+
+# DLQ rate
+rate(normalizer_dlq_published_total[1m])
+```
+
+#### Latency Queries
+
+```promql
+# p95 normalizer processing latency
+histogram_quantile(0.95, rate(normalizer_processing_duration_seconds_bucket[5m]))
+
+# p99 kafka produce latency (RSS ingestor)
+histogram_quantile(0.99, rate(rss_ingestor_kafka_produce_duration_seconds_bucket[5m]))
+```
+
+#### Deduplication Queries
+
+```promql
+# Dedup hit ratio (RSS ingestor)
+rate(rss_ingestor_dedup_hits_total[5m]) / 
+(rate(rss_ingestor_dedup_hits_total[5m]) + rate(rss_ingestor_raw_events_published_total[5m]))
+
+# Normalizer dedup hits per minute
+rate(normalizer_dedup_hits_total[1m]) * 60
+```
+
+#### Consumer Lag Queries
+
+```promql
+# Total normalizer lag
+sum(kafka_consumergroup_lag{topic="raw.events.v1",consumergroup="normalizer-v1"})
+
+# Lag by partition
+kafka_consumergroup_lag{topic="raw.events.v1",consumergroup="normalizer-v1"}
+```
+
+#### Service Health Queries
+
+```promql
+# Service up/down status
+up{job="rss-ingestor"}
+up{job="normalizer"}
+
+# Seconds since last success
+time() - rss_ingestor_last_success_timestamp
+time() - normalizer_last_success_timestamp
+```
+
+### Customizing Grafana
+
+You can customize the dashboard after it's provisioned:
+
+1. Navigate to http://localhost:3001
+2. Go to Dashboards → "Pipeline Health"
+3. Click the gear icon (⚙️) → Settings
+4. Add new panels, modify queries, or adjust thresholds
+5. Click "Save dashboard" to persist changes
+
+**Note:** Changes persist in the `grafana_data` Docker volume.
+
+### Configuration
+
+#### Changing Grafana Credentials
+
+Edit `infra/.env` or set environment variables:
+
+```bash
+GRAFANA_ADMIN_USER=myadmin
+GRAFANA_ADMIN_PASSWORD=strongpassword
+```
+
+Then restart:
+
+```bash
+docker compose --profile observability down
+docker compose --profile observability up -d
+```
+
+#### Changing Ports
+
+Edit `infra/.env`:
+
+```bash
+PROMETHEUS_PORT=9091
+GRAFANA_PORT=3002
+KAFKA_EXPORTER_PORT=9309
+```
+
+#### Adjusting Scrape Intervals
+
+Edit `infra/observability/prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'rss-ingestor'
+    scrape_interval: 5s  # Change from 10s to 5s for more frequent scraping
+```
+
+Restart Prometheus:
+
+```bash
+docker compose restart prometheus
+```
+
+### Troubleshooting Observability
+
+#### Issue: Prometheus Targets Down
+
+**Symptom:** Targets show "DOWN" status in http://localhost:9090/targets
+
+**Solutions:**
+
+1. Verify services are running:
+   ```bash
+   docker compose --profile apps ps
+   curl http://localhost:8001/health
+   curl http://localhost:8002/health
+   ```
+
+2. Check metrics endpoints:
+   ```bash
+   curl http://localhost:8001/metrics
+   curl http://localhost:8002/metrics
+   ```
+
+3. Check Prometheus logs:
+   ```bash
+   docker compose logs prometheus
+   ```
+
+4. Verify network connectivity:
+   ```bash
+   docker exec prometheus ping rss-ingestor
+   docker exec prometheus ping normalizer
+   ```
+
+#### Issue: No Data in Grafana Dashboard
+
+**Symptom:** Dashboard panels show "No data"
+
+**Solutions:**
+
+1. Wait 1-2 minutes for data to populate
+
+2. Check Prometheus targets are UP (see above)
+
+3. Verify Prometheus datasource:
+   - Grafana → Configuration → Data Sources
+   - Click "Prometheus"
+   - Click "Test" button (should show "Data source is working")
+
+4. Check if services are generating traffic:
+   ```bash
+   # Verify events are being produced
+   docker exec -it redpanda rpk topic consume raw.events.v1 -n 1
+   ```
+
+5. Check Grafana logs:
+   ```bash
+   docker compose logs grafana
+   ```
+
+#### Issue: Kafka Exporter Shows No Lag Data
+
+**Symptom:** Consumer lag panels show no data
+
+**Solutions:**
+
+1. Verify kafka-exporter is running:
+   ```bash
+   docker compose --profile observability ps kafka-exporter
+   ```
+
+2. Check kafka-exporter metrics directly:
+   ```bash
+   curl http://localhost:9308/metrics | grep kafka_consumergroup_lag
+   ```
+
+3. Verify consumer group exists:
+   ```bash
+   docker exec -it redpanda rpk group list
+   docker exec -it redpanda rpk group describe normalizer-v1
+   ```
+
+4. Check kafka-exporter logs:
+   ```bash
+   docker compose logs kafka-exporter
+   ```
+
+#### Issue: Grafana Won't Login
+
+**Symptom:** "Invalid username or password" error
+
+**Solutions:**
+
+1. Use default credentials: `admin` / `admin`
+
+2. Reset Grafana admin password:
+   ```bash
+   docker compose stop grafana
+   docker volume rm infra_grafana_data
+   docker compose --profile observability up -d grafana
+   ```
+
+3. Check environment variables:
+   ```bash
+   docker compose config | grep GRAFANA
+   ```
+
+### Stopping Observability Stack
+
+To stop only the observability stack while keeping apps running:
+
+```bash
+docker compose --profile observability down
+```
+
+To stop everything:
+
+```bash
+docker compose --profile apps --profile observability down
+```
+
+To remove all data (including metrics history):
+
+```bash
+docker compose --profile apps --profile observability down -v
+```
+
+⚠️ **Warning:** `down -v` will delete all Prometheus metrics and Grafana dashboards!
+
+### Performance Impact
+
+The observability stack has minimal impact on the pipeline:
+
+- **Prometheus scraping**: ~10-15s intervals, negligible CPU/network
+- **Metrics collection**: Minimal overhead (<1% CPU per service)
+- **Storage**: Prometheus stores ~2-3 MB per day (default 15-day retention)
+- **Grafana**: Only active when dashboard is open
+
+**Recommendation:** Keep observability running in development for continuous monitoring.
+
+### Acceptance Test - Observability
+
+Run this test to verify Phase 1.2 is working:
+
+```bash
+# 1. Start everything
+cd infra
+docker compose --profile apps --profile observability up -d
+
+# 2. Wait for services to be healthy
+sleep 30
+
+# 3. Check metrics endpoints
+echo "Testing RSS Ingestor metrics..."
+curl -s http://localhost:8001/metrics | head -5
+
+echo "Testing Normalizer metrics..."
+curl -s http://localhost:8002/metrics | head -5
+
+# 4. Check Prometheus targets (should all be UP)
+echo "Check Prometheus targets at: http://localhost:9090/targets"
+
+# 5. Access Grafana dashboard
+echo "Access Grafana at: http://localhost:3001"
+echo "Login: admin / admin"
+echo "Dashboard: Pipeline Health"
+
+# 6. Wait 2-3 minutes for RSS polling and data to populate
+
+# 7. Verify metrics in Prometheus
+echo "Sample query: rate(rss_ingestor_raw_events_published_total[1m])"
+```
+
+**Expected Results:**
+- ✅ All metrics endpoints return Prometheus-format data
+- ✅ Prometheus shows 3/3 targets UP
+- ✅ Grafana dashboard loads and shows data after 2-3 minutes
+- ✅ Consumer lag panel shows lag value (0 or >0)
+- ✅ All services remain healthy with observability enabled
+
+### Metrics Best Practices
+
+1. **Don't add high-cardinality labels**: Avoid labels with many unique values (e.g., full URLs, UUIDs)
+2. **Use consistent naming**: Follow Prometheus naming conventions (e.g., `_total` suffix for counters)
+3. **Set reasonable histogram buckets**: Default buckets work for most latency measurements
+4. **Monitor metric cardinality**: Check metric counts in Prometheus to avoid explosion
+5. **Use alerts wisely**: Set up alerting for critical thresholds (high DLQ rate, service down, high lag)
+
+### Next Steps
+
+With observability in place, you can:
+
+1. **Set up alerting**: Configure Prometheus Alertmanager for critical alerts
+2. **Add more dashboards**: Create service-specific or business-metric dashboards
+3. **Export metrics**: Send to external monitoring systems (Datadog, New Relic, etc.)
+4. **Long-term storage**: Configure Prometheus remote write for longer retention
+5. **Distributed tracing**: Add OpenTelemetry for request tracing across services

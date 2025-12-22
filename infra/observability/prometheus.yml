@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'trading-platform'
+    environment: 'local'
+
+scrape_configs:
+  - job_name: 'rss-ingestor'
+    static_configs:
+      - targets: ['rss-ingestor:8000']
+        labels:
+          service: 'rss-ingestor'
+          source_type: 'rss'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'normalizer'
+    static_configs:
+      - targets: ['normalizer:8000']
+        labels:
+          service: 'normalizer'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'kafka-exporter'
+    scrape_interval: 15s
+    metrics_path: '/metrics'

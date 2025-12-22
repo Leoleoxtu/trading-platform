@@ -26,6 +26,7 @@ from kafka import KafkaProducer
 from kafka.errors import KafkaError
 import jsonschema
 from jsonschema import Draft202012Validator
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Configure logging
 logging.basicConfig(
@@ -48,9 +49,22 @@ HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8000'))
 DEDUP_STATE_FILE = os.getenv('DEDUP_STATE_FILE', '/data/seen_items.json')
 
 # Global state
+# Note: These globals are safe as polling_loop runs in a single thread
+# and health_server only reads them
 shutdown_event = Event()
 is_healthy = False
 seen_items: Set[str] = set()
+last_success_timestamp = time.time()  # Initialize to current time to avoid large initial value
+
+# Prometheus metrics
+metrics_items_fetched = Counter('rss_ingestor_items_fetched_total', 'Total items fetched from RSS feeds')
+metrics_raw_events_published = Counter('rss_ingestor_raw_events_published_total', 'Total raw events published to Kafka')
+metrics_raw_events_failed = Counter('rss_ingestor_raw_events_failed_total', 'Total raw events that failed to publish')
+metrics_dedup_hits = Counter('rss_ingestor_dedup_hits_total', 'Total deduplicated items')
+metrics_poll_duration = Histogram('rss_ingestor_poll_duration_seconds', 'Duration of RSS feed polling')
+metrics_minio_put_duration = Histogram('rss_ingestor_minio_put_duration_seconds', 'Duration of MinIO put operations')
+metrics_kafka_produce_duration = Histogram('rss_ingestor_kafka_produce_duration_seconds', 'Duration of Kafka produce operations')
+metrics_last_success = Gauge('rss_ingestor_last_success_timestamp', 'Timestamp of last successful poll')
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -74,6 +88,11 @@ class HealthHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'unhealthy'}).encode())
+        elif self.path == '/metrics':
+            self.send_response(200)
+            self.send_header('Content-Type', CONTENT_TYPE_LATEST)
+            self.end_headers()
+            self.wfile.write(generate_latest())
         else:
             self.send_response(404)
             self.end_headers()
@@ -155,12 +174,15 @@ def create_s3_client():
 def upload_to_minio(s3_client, key: str, content: str, content_type: str) -> str:
     """Upload content to MinIO and return S3 URI."""
     try:
+        start_time = time.time()
         s3_client.put_object(
             Bucket=MINIO_BUCKET_RAW,
             Key=key,
             Body=content.encode('utf-8'),
             ContentType=content_type
         )
+        metrics_minio_put_duration.observe(time.time() - start_time)
+        
         s3_uri = f"s3://{MINIO_BUCKET_RAW}/{key}"
         logger.info(json.dumps({
             'message': 'Uploaded to MinIO',
@@ -199,6 +221,8 @@ def process_rss_item(
     """Process a single RSS item."""
     global seen_items
     
+    metrics_items_fetched.inc()
+    
     # Create dedup key from URL and published date
     item_url = item.get('link', '')
     item_published = item.get('published', item.get('updated', ''))
@@ -210,6 +234,7 @@ def process_rss_item(
             'message': 'Item already seen, skipping',
             'url': item_url
         }))
+        metrics_dedup_hits.inc()
         return False
     
     try:
@@ -277,11 +302,15 @@ def process_rss_item(
                 'message': 'Event validation failed',
                 'event_id': event_id
             }))
+            metrics_raw_events_failed.inc()
             return False
         
         # Publish to Kafka
+        start_time = time.time()
         future = producer.send(KAFKA_TOPIC, value=raw_event)
         future.get(timeout=10)  # Wait for confirmation
+        metrics_kafka_produce_duration.observe(time.time() - start_time)
+        metrics_raw_events_published.inc()
         
         logger.info(json.dumps({
             'message': 'Published RawEvent',
@@ -302,6 +331,7 @@ def process_rss_item(
             'url': item_url,
             'error': str(e)
         }))
+        metrics_raw_events_failed.inc()
         return False
 
 
@@ -320,7 +350,9 @@ def poll_feed(
             'feed_name': feed_name
         }))
         
+        start_time = time.time()
         feed = feedparser.parse(feed_url)
+        metrics_poll_duration.observe(time.time() - start_time)
         
         if feed.bozo:
             logger.warning(json.dumps({
@@ -349,11 +381,12 @@ def poll_feed(
             'feed_url': feed_url,
             'error': str(e)
         }))
+        metrics_raw_events_failed.inc()
 
 
 def polling_loop():
     """Main polling loop."""
-    global is_healthy, seen_items
+    global is_healthy, seen_items, last_success_timestamp
     
     # Load seen items
     seen_items = load_seen_items()
@@ -395,6 +428,10 @@ def polling_loop():
             
             # Save seen items periodically
             save_seen_items(seen_items)
+            
+            # Update last success timestamp
+            last_success_timestamp = time.time()
+            metrics_last_success.set(last_success_timestamp)
             
             # Wait for next poll
             elapsed = time.time() - start_time
