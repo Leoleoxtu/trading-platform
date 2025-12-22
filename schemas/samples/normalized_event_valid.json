@@ -1,0 +1,21 @@
+{
+  "schema_version": "normalized_event.v1",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "normalized_at_utc": "2024-01-15T10:31:00Z",
+  "normalized_text": "TechCrunch Article: Example startup raises $10M in Series A funding. The company focuses on AI-driven trading platforms and has partnered with major financial institutions.",
+  "lang": "en",
+  "canonical_url": "https://techcrunch.com/2024/01/15/example-article",
+  "dedup_key": "b4c6d8e0f2a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3",
+  "source_score": 0.85,
+  "symbols_candidates": ["AAPL", "GOOGL", "MSFT"],
+  "metadata": {
+    "source_type": "rss",
+    "source_name": "TechCrunch RSS Feed",
+    "raw_event_id": "550e8400-e29b-41d4-a716-446655440000",
+    "correlation_id": "660e8400-e29b-41d4-a716-446655440001",
+    "author": "John Doe",
+    "published_at": "2024-01-15T10:00:00Z"
+  },
+  "pipeline_version": "normalizer.v1.0",
+  "quality_flags": ["has_symbols", "high_confidence"]
+}

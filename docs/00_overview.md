@@ -4,6 +4,15 @@
 
 This repository contains the local infrastructure setup (Phase 1) for a real-time data trading platform. The infrastructure is designed to be local-first, plug-and-play, and ready for connecting data ingestion services later.
 
+## Data Contracts (Schemas)
+
+All events in the platform follow versioned JSON Schema contracts:
+
+- **`schemas/raw_event.v1.json`**: Schema for raw events from all sources
+- **`schemas/normalized_event.v1.json`**: Schema for normalized and enriched events
+
+See [`schemas/README.md`](../schemas/README.md) for detailed schema documentation, versioning strategy, and validation.
+
 ## Components
 
 ### Core Services
@@ -32,6 +41,20 @@ This repository contains the local infrastructure setup (Phase 1) for a real-tim
 5. **init-minio** - Automatic bucket creation
    - Runs once at startup
    - Creates all required S3 buckets idempotently
+
+### Application Services (Phase 1)
+
+6. **rss-ingestor** - RSS feed ingestion service
+   - Port: 8001 (health endpoint)
+   - Purpose: Poll RSS feeds, store raw content, publish raw events
+   - Profile: `apps`
+   - See: `docs/10_ingestion.md`
+
+7. **normalizer** - Data normalization service
+   - Port: 8002 (health endpoint)
+   - Purpose: Normalize raw events, detect language, extract symbols
+   - Profile: `apps`
+   - See: `docs/20_normalization.md`
 
 ## Data Flow (Target Architecture)
 
@@ -98,6 +121,8 @@ Examples:
 |---------|-----|-------|
 | Kafka UI | http://localhost:8080 | Web interface for Kafka |
 | MinIO Console | http://localhost:9001 | Web interface for S3 (login: minioadmin/minioadmin123) |
+| RSS Ingestor Health | http://localhost:8001/health | Health check endpoint |
+| Normalizer Health | http://localhost:8002/health | Health check endpoint |
 | Redpanda Kafka | localhost:9092 | Binary protocol (not HTTP) - use Kafka clients or rpk CLI |
 | MinIO S3 API | localhost:9000 | S3-compatible API endpoint |
 
@@ -122,15 +147,19 @@ Configuration is externalized in `infra/.env` (not committed to git):
 ## Future Enhancements
 
 This Phase 1 infrastructure is ready for:
-- RSS feed ingestion service
 - Twitter/X API ingestion service
 - Reddit API ingestion service
 - Market data ingestion service
 - Finnhub financial data ingestion service
-- Data normalization service
-- Data enrichment service
-- Stream processing applications
-- Observability stack (Prometheus, Grafana)
+- Data enrichment service (symbol validation, company info, sentiment)
+- Stream processing applications (real-time aggregations, alerts)
+- Observability stack (Prometheus, Grafana) - Phase 1.2 (optional)
+
+Current implementation (Phase 1):
+- ✅ RSS feed ingestion
+- ✅ Data normalization with deduplication
+- ✅ Dead Letter Queue for error handling
+- ✅ Contract-first with versioned schemas
 
 ## Design Principles
 

@@ -1,0 +1,19 @@
+{
+  "schema_version": "raw_event.v1",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "source_type": "rss",
+  "source_name": "TechCrunch RSS Feed",
+  "captured_at_utc": "2024-01-15T10:30:00Z",
+  "event_time_utc": "2024-01-15T10:00:00Z",
+  "raw_uri": "s3://raw-events/source=rss/dt=2024-01-15/550e8400-e29b-41d4-a716-446655440000.json",
+  "raw_hash": "a3b5c9d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9",
+  "content_type": "application/json",
+  "priority": "MEDIUM",
+  "correlation_id": "660e8400-e29b-41d4-a716-446655440001",
+  "metadata": {
+    "feed_url": "https://techcrunch.com/feed/",
+    "article_url": "https://techcrunch.com/2024/01/15/example-article",
+    "author": "John Doe",
+    "categories": ["Technology", "Startups"]
+  }
+}

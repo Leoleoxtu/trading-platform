@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-platform.local/schemas/normalized_event.v1.json",
+  "title": "Normalized Event v1",
+  "description": "Schema for normalized events after processing and standardization",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "normalized_at_utc",
+    "normalized_text",
+    "lang",
+    "dedup_key",
+    "source_score",
+    "pipeline_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "normalized_event.v1",
+      "description": "Schema version identifier"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the original raw event ID (UUID v4)"
+    },
+    "normalized_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when normalization was performed (RFC3339 format)"
+    },
+    "normalized_text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Normalized and cleaned text content from the event"
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "Detected language code (ISO 639-1, e.g., 'en', 'fr', 'en-US')"
+    },
+    "canonical_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "Canonical URL of the content, if available"
+    },
+    "dedup_key": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash for deduplication (hex encoded)"
+    },
+    "source_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Quality/reliability score of the source (0.0 to 1.0)"
+    },
+    "symbols_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z0-9.-]+$"
+      },
+      "default": [],
+      "description": "List of candidate ticker symbols or trading pairs extracted from the content"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata including source information",
+      "properties": {
+        "source_type": {
+          "type": "string",
+          "description": "Type of the original source"
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Name of the original source"
+        },
+        "raw_event_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Reference to raw event ID (same as event_id)"
+        },
+        "correlation_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Correlation ID from the raw event"
+        }
+      },
+      "additionalProperties": true
+    },
+    "pipeline_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version identifier of the normalization pipeline (e.g., git SHA or 'normalizer.v1')"
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Optional quality indicators (e.g., 'low_confidence', 'incomplete_data', 'verified')"
+    }
+  },
+  "additionalProperties": false
+}

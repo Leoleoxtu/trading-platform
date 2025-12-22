@@ -526,7 +526,7 @@ The following tests confirm the infrastructure is working correctly:
 
 ```bash
 cd infra
-docker compose up -d
+docker compose --profile infra up -d
 ```
 
 **Expected result:**
@@ -552,7 +552,7 @@ raw.events.v1             6           1
 ### Test 3: Verify Buckets Created
 
 ```bash
-docker run --rm --network infra_default minio/mc \
+docker run --rm --network infra_trading-platform minio/mc \
   sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && mc ls local'
 ```
 
@@ -594,14 +594,378 @@ docker compose up init-minio --force-recreate
 - No errors occur
 - Services exit with code 0
 
+### Test 7: Start Applications (Phase 1)
+
+```bash
+cd infra
+docker compose --profile apps up -d
+```
+
+**Expected result:**
+- Infrastructure services start (if not already running)
+- RSS ingestor and normalizer services start
+- All health checks pass after 30 seconds
+
+### Test 8: Verify RSS Ingestor Health
+
+```bash
+curl http://localhost:8001/health
+```
+
+**Expected output:**
+```json
+{
+  "status": "healthy",
+  "service": "rss-ingestor",
+  "feeds_count": 1,
+  "seen_items": 0
+}
+```
+
+### Test 9: Verify Normalizer Health
+
+```bash
+curl http://localhost:8002/health
+```
+
+**Expected output:**
+```json
+{
+  "status": "healthy",
+  "service": "normalizer",
+  "stats": {
+    "processed": 0,
+    "dedup_hits": 0,
+    "dlq_count": 0,
+    "errors": 0
+  }
+}
+```
+
+### Test 10: Verify Raw Events Generated
+
+Wait 2-3 minutes for RSS polling, then:
+
+```bash
+docker exec -it redpanda rpk topic consume raw.events.v1 -n 5
+```
+
+**Expected output:**
+- JSON messages with `schema_version: "raw_event.v1"`
+- Valid `event_id`, `source_type: "rss"`, `raw_uri` fields
+- Messages contain `correlation_id` for tracing
+
+### Test 11: Verify Normalized Events Generated
+
+Wait 1-2 minutes after raw events appear, then:
+
+```bash
+docker exec -it redpanda rpk topic consume events.normalized.v1 -n 5
+```
+
+**Expected output:**
+- JSON messages with `schema_version: "normalized_event.v1"`
+- Valid `event_id` matching raw events
+- `normalized_text`, `lang`, `dedup_key` fields present
+- `symbols_candidates` array (may be empty)
+
+### Test 12: Verify Raw Events in MinIO
+
+```bash
+docker run --rm --network infra_trading-platform minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && \
+         mc ls --recursive local/raw-events/source=rss/ | head -10'
+```
+
+**Expected output:**
+- List of JSON files in `source=rss/dt=YYYY-MM-DD/` partitions
+- File names are UUIDs with `.json` extension
+
+### Test 13: Trace Event End-to-End
+
+Pick an `event_id` from a normalized event, then:
+
+```bash
+EVENT_ID="<event_id_from_test_11>"
+
+# Find in normalized topic
+docker exec -it redpanda rpk topic consume events.normalized.v1 -f json | \
+  grep "$EVENT_ID" | head -1
+
+# Find in raw topic
+docker exec -it redpanda rpk topic consume raw.events.v1 -f json | \
+  grep "$EVENT_ID" | head -1
+
+# Find raw file in MinIO
+docker run --rm --network infra_trading-platform minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && \
+         mc find local/raw-events --name "*'$EVENT_ID'*"'
+```
+
+**Expected result:**
+- Same `event_id` found in both topics
+- Raw JSON file exists in MinIO with matching event_id
+- `correlation_id` is consistent across all artifacts
+
+### Test 14: Verify DLQ is Empty (Good Path)
+
+```bash
+docker exec -it redpanda rpk topic consume events.normalized.dlq.v1 -n 1 --timeout 5s
+```
+
+**Expected result:**
+- Timeout or empty result (no messages in DLQ)
+- If messages exist, investigate error_type and error_message
+
+### Test 15: Verify Schema Validation
+
+```bash
+cd /home/runner/work/trading-platform/trading-platform
+python3 scripts/validate_schema_samples.py
+```
+
+**Expected output:**
+```
+Validating schema samples...
+
+✓ raw_event_valid.json is valid against raw_event.v1.json
+✓ normalized_event_valid.json is valid against normalized_event.v1.json
+
+All validations passed! ✓
+```
+
+## Event Validation Commands
+
+### Produce Test Raw Event
+
+```bash
+echo '{
+  "schema_version": "raw_event.v1",
+  "event_id": "'$(uuidgen)'",
+  "source_type": "manual",
+  "source_name": "test-script",
+  "captured_at_utc": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "event_time_utc": null,
+  "raw_uri": "s3://raw-events/source=manual/dt='$(date -u +%Y-%m-%d)'/test.json",
+  "raw_hash": "a3b5c9d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9",
+  "content_type": "application/json",
+  "priority": "LOW",
+  "correlation_id": "'$(uuidgen)'",
+  "metadata": {}
+}' | docker exec -i redpanda rpk topic produce raw.events.v1
+```
+
+### Consume Raw Events with Filter
+
+```bash
+# Consume and filter by source_type
+docker exec -it redpanda rpk topic consume raw.events.v1 -f json | \
+  grep '"source_type":"rss"' | head -5
+
+# Consume and extract event_id
+docker exec -it redpanda rpk topic consume raw.events.v1 -f json | \
+  jq -r '.value.event_id' | head -10
+```
+
+### Consume Normalized Events with Filter
+
+```bash
+# Filter by language
+docker exec -it redpanda rpk topic consume events.normalized.v1 -f json | \
+  grep '"lang":"en"' | head -5
+
+# Extract symbols
+docker exec -it redpanda rpk topic consume events.normalized.v1 -f json | \
+  jq -r '.value.symbols_candidates[]' | sort | uniq -c | sort -rn | head -20
+```
+
+### Search Event by ID in Kafka UI
+
+1. Open http://localhost:8080
+2. Navigate to Topics → `raw.events.v1` or `events.normalized.v1`
+3. Click "Messages" tab
+4. Use search/filter box: `event_id` → enter UUID
+5. View message details, headers, and key
+
+### Download Raw Event from MinIO
+
+```bash
+EVENT_ID="<your_event_id>"
+DATE="<YYYY-MM-DD>"
+
+docker run --rm --network infra_trading-platform minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && \
+         mc cat local/raw-events/source=rss/dt='$DATE'/'$EVENT_ID'.json' | jq .
+```
+
+## Monitoring and Observability
+
+### Check Service Logs
+
+```bash
+# All services
+docker compose --profile apps logs -f
+
+# Specific service
+docker compose logs -f rss-ingestor
+docker compose logs -f normalizer
+
+# Filter by level
+docker compose logs rss-ingestor | grep '"level":"ERROR"'
+docker compose logs normalizer | grep '"level":"WARNING"'
+```
+
+### Check Health Endpoints
+
+```bash
+# RSS Ingestor
+curl http://localhost:8001/health | jq .
+
+# Normalizer
+curl http://localhost:8002/health | jq .
+```
+
+### Monitor Kafka Consumer Groups
+
+```bash
+# List consumer groups
+docker exec -it redpanda rpk group list
+
+# Describe normalizer consumer group
+docker exec -it redpanda rpk group describe normalizer-v1
+
+# Check lag
+docker exec -it redpanda rpk group describe normalizer-v1 --partitions
+```
+
+### Check Topic Stats
+
+```bash
+# Topic details
+docker exec -it redpanda rpk topic describe raw.events.v1
+docker exec -it redpanda rpk topic describe events.normalized.v1
+
+# Message count (approximate)
+docker exec -it redpanda rpk topic describe raw.events.v1 | grep "high water mark"
+```
+
+### Check MinIO Storage Usage
+
+Via Console: http://localhost:9001 → Buckets → raw-events → Summary
+
+Via CLI:
+```bash
+docker run --rm --network infra_trading-platform minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && \
+         mc du local/raw-events'
+```
+
+## Troubleshooting Phase 1
+
+### No Raw Events Being Generated
+
+**Symptom**: `raw.events.v1` topic is empty after several minutes
+
+**Solution**:
+1. Check RSS ingestor logs:
+   ```bash
+   docker compose logs rss-ingestor | tail -50
+   ```
+
+2. Verify RSS feeds are accessible:
+   ```bash
+   docker exec -it rss-ingestor python -c "import feedparser; print(feedparser.parse('https://feeds.feedburner.com/TechCrunch/'))"
+   ```
+
+3. Check if items are being marked as duplicates:
+   ```bash
+   curl http://localhost:8001/health | jq .seen_items
+   ```
+
+4. Reset deduplication state:
+   ```bash
+   docker compose stop rss-ingestor
+   docker volume rm infra_rss_ingestor_data
+   docker compose --profile apps up -d rss-ingestor
+   ```
+
+### No Normalized Events Being Generated
+
+**Symptom**: `events.normalized.v1` topic is empty but `raw.events.v1` has messages
+
+**Solution**:
+1. Check normalizer logs:
+   ```bash
+   docker compose logs normalizer | tail -50
+   ```
+
+2. Check consumer group lag:
+   ```bash
+   docker exec -it redpanda rpk group describe normalizer-v1
+   ```
+
+3. Check DLQ for errors:
+   ```bash
+   docker exec -it redpanda rpk topic consume events.normalized.dlq.v1 -n 10
+   ```
+
+4. Verify MinIO connectivity from normalizer:
+   ```bash
+   docker exec -it normalizer wget -O- http://minio:9000/minio/health/live
+   ```
+
+### High DLQ Count
+
+**Symptom**: Many messages in `events.normalized.dlq.v1`
+
+**Solution**:
+1. Consume DLQ and check error types:
+   ```bash
+   docker exec -it redpanda rpk topic consume events.normalized.dlq.v1 -f json | \
+     jq -r '.value | "\(.error_type): \(.error_message)"' | head -20
+   ```
+
+2. Common issues:
+   - `download_error`: Raw files missing in MinIO (check S3 URIs)
+   - `schema_validation_error`: Schema version mismatch
+   - `normalization_error`: Empty text content
+
+### Schema Validation Errors
+
+**Symptom**: Events rejected due to schema validation
+
+**Solution**:
+1. Check schema version in events:
+   ```bash
+   docker exec -it redpanda rpk topic consume raw.events.v1 -n 1 -f json | \
+     jq .value.schema_version
+   ```
+
+2. Validate sample events:
+   ```bash
+   docker exec -it redpanda rpk topic consume raw.events.v1 -n 1 -f json | \
+     jq .value > /tmp/test_event.json
+   
+   python3 scripts/validate_schema_samples.py \
+     schemas/raw_event.v1.json /tmp/test_event.json
+   ```
+
 ## Next Steps
 
-After verifying the infrastructure works:
+After verifying Phase 1 works:
 
-1. Develop data ingestion services (RSS, Twitter, Reddit, Market, Finnhub)
-2. Develop normalization service to process raw → normalized events
-3. Set up monitoring and observability (Prometheus, Grafana)
-4. Implement data enrichment pipelines
-5. Build analytics and visualization layer
+1. ✅ Infrastructure running (Redpanda, MinIO, Kafka UI)
+2. ✅ RSS ingestor producing raw events
+3. ✅ Normalizer processing and producing normalized events
+4. ✅ Schemas validated
+5. ✅ End-to-end tracing working
 
-See `docs/00_overview.md` for architecture details.
+Future development:
+- Twitter/X API ingestion service
+- Reddit API ingestion service  
+- Market data ingestion (yfinance, Finnhub)
+- Data enrichment pipeline (symbol validation, sentiment)
+- Stream processing (real-time aggregations)
+- Observability stack (Prometheus, Grafana) - Phase 1.2
+
+See `docs/10_ingestion.md` and `docs/20_normalization.md` for service details.

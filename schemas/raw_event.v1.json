@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-platform.local/schemas/raw_event.v1.json",
+  "title": "Raw Event v1",
+  "description": "Schema for raw events captured from various sources before normalization",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "source_type",
+    "source_name",
+    "captured_at_utc",
+    "raw_uri",
+    "raw_hash",
+    "content_type",
+    "priority",
+    "correlation_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "raw_event.v1",
+      "description": "Schema version identifier"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event (UUID v4)"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "rss",
+        "twitter",
+        "reddit",
+        "newsapi",
+        "market",
+        "scrape",
+        "finnhub",
+        "manual"
+      ],
+      "description": "Type of the data source"
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "Name or identifier of the specific source (e.g., feed name, API endpoint)"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when the event was captured by the ingestor (RFC3339 format)"
+    },
+    "event_time_utc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Original timestamp of the event from the source, if available (RFC3339 format)"
+    },
+    "raw_uri": {
+      "type": "string",
+      "pattern": "^s3://[a-z0-9-]+/.+",
+      "description": "S3 URI pointing to the raw event data stored in MinIO (e.g., s3://raw-events/source=rss/dt=2024-01-15/event_id.json)"
+    },
+    "raw_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of the raw event content (hex encoded)"
+    },
+    "content_type": {
+      "type": "string",
+      "description": "MIME type of the raw content (e.g., application/json, text/html, text/plain)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW"],
+      "description": "Processing priority for the event"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Correlation ID for tracing the event through the pipeline (UUID v4)"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional metadata specific to the source type",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
