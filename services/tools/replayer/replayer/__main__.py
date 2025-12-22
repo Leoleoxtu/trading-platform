@@ -271,19 +271,23 @@ class Replayer:
         # Get source_name from raw content or use source_type
         source_name = raw_content.get('source', source_type) if isinstance(raw_content, dict) else source_type
         
-        # Build replay metadata
-        replay_metadata = {
+        # Initialize replay metadata
+        replay_metadata = {}
+        
+        # Add original metadata if present
+        if isinstance(raw_content, dict) and 'metadata' in raw_content:
+            original_metadata = raw_content.get('metadata', {})
+            replay_metadata.update(original_metadata)
+        
+        # Build replay flags (applied last to ensure they are preserved)
+        replay_flags = {
             'is_replay': True,
             'replay_id': self.replay_id,
             'replay_reason': self.args.replay_reason,
             'replay_source_prefix': f"raw-events/source={source_type}/",
             'replay_published_at_utc': datetime.now(timezone.utc).isoformat()
         }
-        
-        # Add original metadata if present
-        if isinstance(raw_content, dict) and 'metadata' in raw_content:
-            original_metadata = raw_content.get('metadata', {})
-            replay_metadata.update(original_metadata)
+        replay_metadata.update(replay_flags)
         
         # Construct RawEvent v1
         raw_event = {
@@ -434,6 +438,11 @@ class Replayer:
         }))
 
 
+def str_to_bool(value: str) -> bool:
+    """Convert string to boolean."""
+    return value.lower() in ['true', '1', 'yes']
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -481,7 +490,7 @@ def main():
     
     parser.add_argument(
         '--dry-run',
-        type=lambda x: x.lower() in ['true', '1', 'yes'],
+        type=str_to_bool,
         default=True,
         help='Dry run mode - list files without publishing (default: true)'
     )
