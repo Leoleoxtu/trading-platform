@@ -47,6 +47,8 @@ create_topic "raw.events.v1" 6
 create_topic "raw.events.dlq.v1" 1
 create_topic "events.normalized.v1" 6
 create_topic "events.normalized.dlq.v1" 1
+create_topic "events.enriched.v1" 6
+create_topic "events.enriched.dlq.v1" 1
 
 echo "All topics initialized successfully!"
 

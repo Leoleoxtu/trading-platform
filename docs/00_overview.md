@@ -9,7 +9,8 @@ This repository contains the local infrastructure setup (Phase 1) for a real-tim
 All events in the platform follow versioned JSON Schema contracts:
 
 - **`schemas/raw_event.v1.json`**: Schema for raw events from all sources
-- **`schemas/normalized_event.v1.json`**: Schema for normalized and enriched events
+- **`schemas/normalized_event.v1.json`**: Schema for normalized events
+- **`schemas/enriched_event.v1.json`**: Schema for NLP-enriched events
 
 See [`schemas/README.md`](../schemas/README.md) for detailed schema documentation, versioning strategy, and validation.
 
@@ -56,6 +57,12 @@ See [`schemas/README.md`](../schemas/README.md) for detailed schema documentatio
    - Profile: `apps`
    - See: `docs/20_normalization.md`
 
+8. **nlp-enricher** - NLP enrichment service
+   - Port: 8005 (health endpoint)
+   - Purpose: Extract entities, resolve tickers, analyze sentiment, categorize events
+   - Profile: `apps`
+   - See: `docs/30_enrichment.md`
+
 ## Data Flow (Target Architecture)
 
 The platform is designed to handle the following data flow:
@@ -63,16 +70,16 @@ The platform is designed to handle the following data flow:
 ```
 External Sources → Raw Events → Normalized Events → Enriched Events → Analytics
                       ↓              ↓                    ↓
-                   raw.events.v1  events.normalized.v1  (future)
-                      ↓              ↓
-                   S3: raw-events  S3: pipeline-artifacts
+                   raw.events.v1  events.normalized.v1  events.enriched.v1
+                      ↓              ↓                    ↓
+                   S3: raw-events  S3: pipeline-artifacts  S3: pipeline-artifacts
 ```
 
 ### Stage Descriptions
 
 1. **Raw Events** - Unprocessed events from various sources (RSS, Twitter, Reddit, Market, Finnhub)
-2. **Normalized Events** - Standardized schema and format
-3. **Enriched Events** - (Future) Enhanced with additional data
+2. **Normalized Events** - Standardized schema and format with language detection and deduplication
+3. **Enriched Events** - Enhanced with NLP: entities, tickers, sentiment, categorization
 4. **Analytics** - (Future) Aggregated and analyzed data
 
 ## Topics
@@ -85,6 +92,8 @@ All topics are created automatically at startup:
 | `raw.events.dlq.v1` | 1 | Dead Letter Queue for raw events that failed processing |
 | `events.normalized.v1` | 6 | Normalized events in standard schema |
 | `events.normalized.dlq.v1` | 1 | Dead Letter Queue for normalization failures |
+| `events.enriched.v1` | 6 | Enriched events with NLP (entities, sentiment, tickers) |
+| `events.enriched.dlq.v1` | 1 | Dead Letter Queue for enrichment failures |
 
 ### Topic Naming Convention
 
@@ -123,6 +132,7 @@ Examples:
 | MinIO Console | http://localhost:9001 | Web interface for S3 (login: minioadmin/minioadmin123) |
 | RSS Ingestor Health | http://localhost:8001/health | Health check endpoint |
 | Normalizer Health | http://localhost:8002/health | Health check endpoint |
+| NLP Enricher Health | http://localhost:8005/health | Health check endpoint |
 | Redpanda Kafka | localhost:9092 | Binary protocol (not HTTP) - use Kafka clients or rpk CLI |
 | MinIO S3 API | localhost:9000 | S3-compatible API endpoint |
 
@@ -155,11 +165,15 @@ This Phase 1 infrastructure is ready for:
 - Stream processing applications (real-time aggregations, alerts)
 - Observability stack (Prometheus, Grafana) - Phase 1.2 (optional)
 
-Current implementation (Phase 1):
+Current implementation (Phase 1 + 1.5):
 - ✅ RSS feed ingestion
+- ✅ Reddit feed ingestion
+- ✅ Market data ingestion (TimescaleDB)
 - ✅ Data normalization with deduplication
+- ✅ NLP enrichment (entities, sentiment, tickers, categorization)
 - ✅ Dead Letter Queue for error handling
 - ✅ Contract-first with versioned schemas
+- ✅ Observability with Prometheus and Grafana
 
 ## Design Principles
 

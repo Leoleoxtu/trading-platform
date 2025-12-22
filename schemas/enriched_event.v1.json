@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-platform.local/schemas/enriched_event.v1.json",
+  "title": "Enriched Event v1",
+  "description": "Schema for NLP-enriched events with entities, sentiment, tickers, and categorization",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "enriched_at_utc",
+    "pipeline_version",
+    "source_type",
+    "source_name",
+    "lang",
+    "normalized_text_hash",
+    "entities",
+    "tickers",
+    "sentiment",
+    "event_category"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "enriched_event.v1",
+      "description": "Schema version identifier"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the original event ID (UUID v4)"
+    },
+    "enriched_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when enrichment was performed (RFC3339 format)"
+    },
+    "pipeline_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version identifier of the enrichment pipeline (e.g., git SHA or 'nlp-enricher.v1')"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "rss",
+        "twitter",
+        "reddit",
+        "newsapi",
+        "market",
+        "scrape",
+        "finnhub",
+        "manual"
+      ],
+      "description": "Type of the original data source"
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name or identifier of the specific source"
+    },
+    "event_time_utc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Original timestamp of the event from the source, if available (RFC3339 format)"
+    },
+    "canonical_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "Canonical URL of the content, if available"
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "Language code (ISO 639-1, e.g., 'en', 'fr', 'en-US')"
+    },
+    "normalized_text_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of the normalized text that was processed (hex encoded)"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "text", "confidence"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["ORG", "PERSON", "PRODUCT", "COUNTRY", "EVENT", "OTHER"],
+            "description": "Type of the named entity"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Text of the named entity"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score for the entity extraction (0.0 to 1.0)"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "List of named entities extracted from the text"
+    },
+    "tickers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "confidence", "method"],
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Z0-9.-]+$",
+            "description": "Trading symbol or ticker"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score for the ticker match (0.0 to 1.0)"
+          },
+          "method": {
+            "type": "string",
+            "enum": ["regex", "ner", "mapping", "validated"],
+            "description": "Method used to extract/validate the ticker"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "List of validated trading symbols/tickers"
+    },
+    "sentiment": {
+      "type": "object",
+      "required": ["score", "confidence", "model"],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1,
+          "description": "Sentiment score from -1.0 (very negative) to +1.0 (very positive)"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence in the sentiment analysis (0.0 to 1.0)"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sentiment model used (e.g., 'finbert', 'vader', 'textblob', 'none')"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Sentiment analysis results"
+    },
+    "event_category": {
+      "type": "string",
+      "enum": [
+        "macro",
+        "earnings",
+        "regulation",
+        "security",
+        "product",
+        "market",
+        "company",
+        "crypto",
+        "other"
+      ],
+      "description": "Classification of the event type"
+    },
+    "embedding": {
+      "type": ["object", "null"],
+      "properties": {
+        "embedding_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for retrieving the embedding vector"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Embedding model used (e.g., 'all-MiniLM-L6-v2')"
+        },
+        "dim": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Dimensionality of the embedding vector"
+        }
+      },
+      "required": ["embedding_id", "model", "dim"],
+      "additionalProperties": false,
+      "description": "Optional embedding metadata (vector stored separately)"
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Quality indicators (e.g., 'LOW_TEXT', 'LANG_UNKNOWN', 'TICKERS_UNCERTAIN', 'ENTITIES_UNCERTAIN', 'SENTIMENT_NEUTRAL', 'CATEGORY_UNCERTAIN')"
+    }
+  },
+  "additionalProperties": false
+}

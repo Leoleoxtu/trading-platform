@@ -28,6 +28,7 @@ docker compose ps
 | **Normalizer** | http://localhost:8002 | Health/metrics endpoints |
 | **Reddit Ingestor** | http://localhost:8003 | Health/metrics endpoints |
 | **Market Ingestor** | http://localhost:8004 | Health/metrics endpoints |
+| **NLP Enricher** | http://localhost:8005 | Health/metrics endpoints |
 | **TimescaleDB** | localhost:5432 | PostgreSQL with TimescaleDB extension |
 | **Prometheus** | http://localhost:9090 | Metrics and queries |
 | **Grafana** | http://localhost:3001 | Dashboards (admin/admin) |
@@ -45,6 +46,8 @@ docker compose ps
 - `raw.events.dlq.v1` (1 partition) - Dead letter queue for raw events
 - `events.normalized.v1` (6 partitions) - Normalized events
 - `events.normalized.dlq.v1` (1 partition) - Dead letter queue for normalized events
+- `events.enriched.v1` (6 partitions) - NLP-enriched events with entities, sentiment, tickers
+- `events.enriched.dlq.v1` (1 partition) - Dead letter queue for enriched events
 
 ### S3 Buckets (Auto-created)
 - `raw-events` - Long-term storage of raw events
@@ -57,6 +60,7 @@ docker compose ps
 - **[Ingestion - Reddit](docs/15_reddit_ingestion.md)** - Reddit submissions and comments ingestion
 - **[Ingestion - Market Data](services/ingestors/market/README.md)** - OHLCV market data from Yahoo Finance
 - **[Normalization](docs/20_normalization.md)** - Event normalization service
+- **[NLP Enrichment](docs/30_enrichment.md)** - NLP enrichment service (entities, sentiment, tickers)
 - **[Operations Guide](docs/90_operations.md)** - Commands, troubleshooting, and acceptance tests
 
 ## System Requirements
@@ -76,7 +80,8 @@ External Sources → Redpanda (Kafka) → Processing Services
 Data flows through stages:
 1. **Raw Events** - Unprocessed data from sources
 2. **Normalized Events** - Standardized schema
-3. **(Future) Enriched Events** - Enhanced with additional data
+3. **Enriched Events** - Enhanced with NLP (entities, sentiment, tickers, categorization)
+4. **(Future) Analytics** - Aggregated and analyzed data
 
 ## Common Commands
 
@@ -113,6 +118,7 @@ This infrastructure is ready for connecting:
 - **RSS Ingestor**: Polls RSS feeds and publishes to Kafka
 - **Reddit Ingestor**: Collects Reddit submissions/comments via PRAW
 - **Normalizer**: Normalizes events from various sources
+- **NLP Enricher**: Enriches events with entities, sentiment, tickers, and categorization
 - **Market Ingestor**: Fetches OHLCV market data from Yahoo Finance into TimescaleDB
 - **Observability**: Prometheus + Grafana with comprehensive dashboards
 
