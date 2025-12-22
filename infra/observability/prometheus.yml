@@ -48,3 +48,11 @@ scrape_configs:
           source_type: 'market'
     scrape_interval: 10s
     metrics_path: '/metrics'
+
+  - job_name: 'nlp-enricher'
+    static_configs:
+      - targets: ['nlp-enricher:8000']
+        labels:
+          service: 'nlp-enricher'
+    scrape_interval: 10s
+    metrics_path: '/metrics'

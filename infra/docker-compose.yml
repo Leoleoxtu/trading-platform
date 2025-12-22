@@ -317,6 +317,45 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  nlp-enricher:
+    build:
+      context: ../services/enrichment/nlp
+      dockerfile: Dockerfile
+    container_name: nlp-enricher
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+      init-minio:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_TOPIC_NORMALIZED: events.normalized.v1
+      KAFKA_TOPIC_ENRICHED: events.enriched.v1
+      KAFKA_TOPIC_DLQ: events.enriched.dlq.v1
+      KAFKA_CONSUMER_GROUP: nlp-enricher-v1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET_ARTIFACTS: pipeline-artifacts
+      WRITE_ENRICHED_TO_MINIO: ${WRITE_ENRICHED_TO_MINIO:-true}
+      ENABLE_EMBEDDINGS: ${ENABLE_EMBEDDINGS:-false}
+      TICKER_WHITELIST: ${TICKER_WHITELIST:-AAPL,MSFT,GOOGL,GOOG,AMZN,TSLA,META,NVDA,BRK.A,BRK.B,JPM,JNJ,V,PG,UNH,BTC,ETH,BNB,XRP,ADA,DOGE,SOL,DOT,MATIC}
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-nlp-enricher.v1.0}
+      HEALTH_PORT: 8000
+      USE_SPACY: ${USE_SPACY:-false}
+    volumes:
+      - ../schemas:/app/schemas:ro
+    ports:
+      - "8005:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
 networks:
   trading-platform:
     driver: bridge

@@ -108,7 +108,8 @@ Environment variables:
 | `ENABLE_EMBEDDINGS` | `false` | Enable embedding generation |
 | `TICKER_WHITELIST` | (see below) | Comma-separated ticker symbols |
 | `PIPELINE_VERSION` | `nlp-enricher.v1.0` | Version identifier |
-| `HEALTH_PORT` | `8004` | Health/metrics HTTP port |
+| `HEALTH_PORT` | `8000` | Health/metrics HTTP port (container) |
+| `USE_SPACY` | `false` | Enable spaCy for NER (requires model download) |
 
 ### Ticker Whitelist
 
@@ -246,13 +247,13 @@ docker compose --profile apps --profile observability up -d
 ### Check Health
 
 ```bash
-curl http://localhost:8004/health
+curl http://localhost:8005/health
 ```
 
 ### View Metrics
 
 ```bash
-curl http://localhost:8004/metrics
+curl http://localhost:8005/metrics
 ```
 
 ### Consume Enriched Events

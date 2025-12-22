@@ -58,7 +58,7 @@ See [`schemas/README.md`](../schemas/README.md) for detailed schema documentatio
    - See: `docs/20_normalization.md`
 
 8. **nlp-enricher** - NLP enrichment service
-   - Port: 8004 (health endpoint)
+   - Port: 8005 (health endpoint)
    - Purpose: Extract entities, resolve tickers, analyze sentiment, categorize events
    - Profile: `apps`
    - See: `docs/30_enrichment.md`
@@ -132,7 +132,7 @@ Examples:
 | MinIO Console | http://localhost:9001 | Web interface for S3 (login: minioadmin/minioadmin123) |
 | RSS Ingestor Health | http://localhost:8001/health | Health check endpoint |
 | Normalizer Health | http://localhost:8002/health | Health check endpoint |
-| NLP Enricher Health | http://localhost:8004/health | Health check endpoint (Note: conflicts with Market Ingestor in README) |
+| NLP Enricher Health | http://localhost:8005/health | Health check endpoint |
 | Redpanda Kafka | localhost:9092 | Binary protocol (not HTTP) - use Kafka clients or rpk CLI |
 | MinIO S3 API | localhost:9000 | S3-compatible API endpoint |
 
