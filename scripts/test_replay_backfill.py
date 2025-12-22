@@ -68,7 +68,7 @@ def create_test_data():
         raw_content = {
             "title": f"Test Event {i+1}",
             "content": f"This is test content for event {i+1}",
-            "source": "test",
+            "source": "manual",
             "published": datetime.now(timezone.utc).isoformat(),
             "url": f"https://example.com/test/{event_id}"
         }
@@ -79,7 +79,7 @@ def create_test_data():
             json.dump(raw_content, f)
         
         # Upload to MinIO
-        s3_key = f"source=test/dt={today}/{event_id}.json"
+        s3_key = f"source=manual/dt={today}/{event_id}.json"
         cmd = (
             f"docker run --rm --network infra_trading-platform "
             f"-v {temp_file}:/tmp/event.json "
@@ -107,7 +107,7 @@ def run_replayer(date, dry_run=False):
     
     cmd = (
         f"docker compose --profile tools run --rm replayer "
-        f"--source test "
+        f"--source manual "
         f"--date {date} "
         f"--limit 10 "
         f"--rate 50 "
@@ -178,7 +178,7 @@ def cleanup_test_data(date):
         f"docker run --rm --network infra_trading-platform "
         f"--entrypoint /bin/sh minio/mc -c '"
         f"mc alias set local http://minio:9000 minioadmin minioadmin123 > /dev/null 2>&1 && "
-        f"mc rm --recursive --force local/raw-events/source=test/dt={date}/'"
+        f"mc rm --recursive --force local/raw-events/source=manual/dt={date}/'"
     )
     
     result = run_command(cmd, check=False)
