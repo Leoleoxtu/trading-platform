@@ -75,6 +75,20 @@ def test_health_endpoints():
         print(f"✗ RSS Ingestor health check failed: {e}")
         return False
     
+    # Check Reddit ingestor
+    try:
+        reddit_health = run_command("curl -s http://localhost:8003/health", check=False)
+        if reddit_health:
+            reddit_data = json.loads(reddit_health)
+            if reddit_data.get("status") == "healthy":
+                print(f"✓ Reddit Ingestor healthy (seen_items: {reddit_data.get('seen_items', 0)})")
+            else:
+                print("⚠ Reddit Ingestor unhealthy (may need credentials)")
+        else:
+            print("⚠ Reddit Ingestor not running (optional service)")
+    except Exception as e:
+        print(f"⚠ Reddit Ingestor not available: {e}")
+    
     # Check normalizer
     try:
         norm_health = run_command("curl -s http://localhost:8002/health")
@@ -193,6 +207,52 @@ def test_end_to_end_flow():
         print(f"  ✗ Failed to parse normalized event: {e}")
         return False
 
+def test_reddit_metrics():
+    """Test 5: Verify Reddit ingestor metrics (if available)."""
+    print("\nTest 5: Checking Reddit ingestor metrics...")
+    
+    try:
+        metrics_output = run_command("curl -s http://localhost:8003/metrics", check=False)
+        if not metrics_output:
+            print("⚠ Reddit Ingestor not available (optional service)")
+            return True  # Pass test if service not running
+        
+        # Check for expected metrics
+        required_metrics = [
+            'reddit_ingestor_raw_events_published_total',
+            'reddit_ingestor_items_fetched_total',
+            'reddit_ingestor_dedup_hits_total',
+            'reddit_ingestor_last_success_timestamp'
+        ]
+        
+        missing_metrics = []
+        for metric in required_metrics:
+            if metric not in metrics_output:
+                missing_metrics.append(metric)
+        
+        if missing_metrics:
+            print(f"✗ Missing metrics: {', '.join(missing_metrics)}")
+            return False
+        else:
+            print("✓ All Reddit metrics present")
+            
+            # Try to check if Reddit events are being published
+            if 'reddit_ingestor_raw_events_published_total' in metrics_output:
+                # Look for the metric value
+                for line in metrics_output.split('\n'):
+                    if line.startswith('reddit_ingestor_raw_events_published_total'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            count = float(parts[1])
+                            print(f"  Reddit events published: {int(count)}")
+                            break
+            
+            return True
+            
+    except Exception as e:
+        print(f"⚠ Could not check Reddit metrics: {e}")
+        return True  # Pass if Reddit service not available
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -203,7 +263,8 @@ def main():
         test_schema_validation,
         test_infrastructure,
         test_health_endpoints,
-        test_end_to_end_flow
+        test_end_to_end_flow,
+        test_reddit_metrics
     ]
     
     results = []

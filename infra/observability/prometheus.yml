@@ -15,6 +15,15 @@ scrape_configs:
     scrape_interval: 10s
     metrics_path: '/metrics'
 
+  - job_name: 'reddit-ingestor'
+    static_configs:
+      - targets: ['reddit-ingestor:8000']
+        labels:
+          service: 'reddit-ingestor'
+          source_type: 'reddit'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
   - job_name: 'normalizer'
     static_configs:
       - targets: ['normalizer:8000']
