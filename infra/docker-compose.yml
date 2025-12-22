@@ -83,7 +83,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     volumes:
       - ./minio/init-buckets.sh:/init-buckets.sh
-    entrypoint: ["/bin/sh", "/init-buckets.sh"]
+    entrypoint: ["/bin/bash", "/init-buckets.sh"]
     restart: "no"
 
 volumes:
