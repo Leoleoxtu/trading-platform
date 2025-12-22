@@ -172,6 +172,47 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  reddit-ingestor:
+    build:
+      context: ../services/ingestors/reddit
+      dockerfile: Dockerfile
+    container_name: reddit-ingestor
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+      init-minio:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_TOPIC_RAW: raw.events.v1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET_RAW: raw-events
+      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID}
+      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-trading-platform-ingestor/1.0}
+      REDDIT_SUBREDDITS: ${REDDIT_SUBREDDITS:-wallstreetbets,stocks}
+      REDDIT_MODE: ${REDDIT_MODE:-submissions}
+      REDDIT_POLL_SECONDS: ${REDDIT_POLL_SECONDS:-60}
+      REDDIT_LIMIT_PER_POLL: ${REDDIT_LIMIT_PER_POLL:-50}
+      REDDIT_PRIORITY: ${REDDIT_PRIORITY:-MEDIUM}
+      HEALTH_PORT: 8000
+      DEDUP_STATE_FILE: /data/seen_items.json
+    volumes:
+      - reddit_ingestor_data:/data
+      - ../schemas:/app/schemas:ro
+    ports:
+      - "8003:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -235,5 +276,6 @@ volumes:
   minio_data:
   rss_ingestor_data:
   normalizer_data:
+  reddit_ingestor_data:
   prometheus_data:
   grafana_data:

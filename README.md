@@ -24,6 +24,11 @@ docker compose ps
 | **MinIO Console** | http://localhost:9001 | Browse S3 buckets (login: minioadmin/minioadmin123) |
 | **Redpanda (Kafka)** | localhost:9092 | Kafka API for applications |
 | **MinIO S3 API** | localhost:9000 | S3 API for applications |
+| **RSS Ingestor** | http://localhost:8001 | Health/metrics endpoints |
+| **Normalizer** | http://localhost:8002 | Health/metrics endpoints |
+| **Reddit Ingestor** | http://localhost:8003 | Health/metrics endpoints |
+| **Prometheus** | http://localhost:9090 | Metrics and queries |
+| **Grafana** | http://localhost:3001 | Dashboards (admin/admin) |
 
 ## What's Included
 
@@ -46,6 +51,9 @@ docker compose ps
 ## Documentation
 
 - **[Overview](docs/00_overview.md)** - Architecture, data flow, and conventions
+- **[Ingestion - RSS](docs/10_ingestion.md)** - RSS feed ingestion service
+- **[Ingestion - Reddit](docs/15_reddit_ingestion.md)** - Reddit submissions and comments ingestion
+- **[Normalization](docs/20_normalization.md)** - Event normalization service
 - **[Operations Guide](docs/90_operations.md)** - Commands, troubleshooting, and acceptance tests
 
 ## System Requirements
@@ -93,10 +101,16 @@ docker compose ps
 ## Development
 
 This infrastructure is ready for connecting:
-- Data ingestion services (RSS, Twitter, Reddit, Market data, Finnhub)
+- Data ingestion services (RSS, Reddit, Twitter, Market data, Finnhub)
 - Stream processing applications
 - Data normalization services
 - Analytics and visualization tools
+
+### Implemented Services (Phase 1)
+- **RSS Ingestor**: Polls RSS feeds and publishes to Kafka
+- **Reddit Ingestor**: Collects Reddit submissions/comments via PRAW
+- **Normalizer**: Normalizes events from various sources
+- **Observability**: Prometheus + Grafana with comprehensive dashboards
 
 ## Support
 
