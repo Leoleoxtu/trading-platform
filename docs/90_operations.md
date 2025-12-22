@@ -80,6 +80,7 @@ docker exec -it init-minio mc ls local
 
 Or configure mc locally:
 ```bash
+# ⚠️ NOTE: Default credentials shown below - change these in production!
 docker run --rm -it --network infra_default minio/mc \
   alias set local http://minio:9000 minioadmin minioadmin123
 
@@ -205,7 +206,9 @@ docker compose up -d
 
 ### Changing MinIO Credentials
 
-Edit `infra/.env`:
+⚠️ **IMPORTANT**: The default credentials (`minioadmin`/`minioadmin123`) are for local development only. **Never use these in production!**
+
+To change credentials, edit `infra/.env`:
 ```
 MINIO_ROOT_USER=myadmin
 MINIO_ROOT_PASSWORD=mysecurepassword
@@ -217,6 +220,13 @@ cd infra
 docker compose down -v  # Remove old data
 docker compose up -d
 ```
+
+**Security Note**: For production deployments:
+- Use strong, randomly generated passwords
+- Consider using secrets management (Docker secrets, Vault, etc.)
+- Enable TLS/SSL encryption
+- Implement proper access controls and IAM policies
+- Change all default credentials before exposing services
 
 ## Troubleshooting
 

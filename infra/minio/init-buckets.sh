@@ -4,6 +4,8 @@ set -e
 echo "Waiting for MinIO to be ready..."
 
 # Configure mc client
+# Note: Credentials are passed via environment variables from docker-compose
+# This is acceptable for local development. For production, use secrets management.
 mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}
 
 # Wait for MinIO to be available

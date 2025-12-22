@@ -27,6 +27,7 @@ create_topic() {
   local topic_name=$1
   local partitions=$2
   
+  # Use word boundary to match exact topic name (not substring)
   if rpk topic list --brokers redpanda:29092 | grep -q "^${topic_name}[[:space:]]"; then
     echo "Topic '${topic_name}' already exists - skipping"
   else
