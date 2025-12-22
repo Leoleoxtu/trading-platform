@@ -55,6 +55,10 @@ HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8000'))
 DEDUP_STATE_FILE = os.getenv('DEDUP_STATE_FILE', '/data/seen_items.json')
 PRIORITY = os.getenv('REDDIT_PRIORITY', 'MEDIUM')
 
+# Constants
+REDDIT_BASE_URL = 'https://reddit.com'
+DEFAULT_SUBREDDIT = 'wallstreetbets'
+
 # Global state
 shutdown_event = Event()
 is_healthy = False
@@ -290,10 +294,10 @@ def process_reddit_submission(
         raw_content = {
             'kind': 'submission',
             'id': reddit_id,
-            'permalink': f"https://reddit.com{submission.permalink}",
+            'permalink': f"{REDDIT_BASE_URL}{submission.permalink}",
             'url': submission.url,
             'title': submission.title,
-            'selftext': submission.selftext if hasattr(submission, 'selftext') else '',
+            'selftext': submission.selftext,
             'author': str(submission.author) if submission.author else '[deleted]',
             'created_utc': submission.created_utc,
             'subreddit': subreddit_name,
@@ -333,7 +337,7 @@ def process_reddit_submission(
                 'subreddit': subreddit_name,
                 'kind': 'submission',
                 'reddit_id': reddit_id,
-                'permalink': f"https://reddit.com{submission.permalink}",
+                'permalink': f"{REDDIT_BASE_URL}{submission.permalink}",
                 'title': submission.title
             }
         }
@@ -434,7 +438,7 @@ def process_reddit_comment(
         raw_content = {
             'kind': 'comment',
             'id': reddit_id,
-            'permalink': f"https://reddit.com{comment.permalink}",
+            'permalink': f"{REDDIT_BASE_URL}{comment.permalink}",
             'body': comment.body,
             'author': str(comment.author) if comment.author else '[deleted]',
             'created_utc': comment.created_utc,
@@ -474,7 +478,7 @@ def process_reddit_comment(
                 'subreddit': subreddit_name,
                 'kind': 'comment',
                 'reddit_id': reddit_id,
-                'permalink': f"https://reddit.com{comment.permalink}"
+                'permalink': f"{REDDIT_BASE_URL}{comment.permalink}"
             }
         }
         
@@ -633,7 +637,7 @@ def polling_loop():
         logger.warning(json.dumps({
             'message': 'No subreddits configured, using default'
         }))
-        subreddits = ['wallstreetbets']
+        subreddits = [DEFAULT_SUBREDDIT]
     
     logger.info(json.dumps({
         'message': 'Starting Reddit ingestor',
@@ -707,6 +711,7 @@ def polling_loop():
 def run_health_server():
     """Run health check HTTP server."""
     server = HTTPServer(('0.0.0.0', HEALTH_PORT), HealthHandler)
+    server.timeout = 1  # Set timeout to prevent busy waiting
     logger.info(json.dumps({
         'message': 'Health server started',
         'port': HEALTH_PORT
