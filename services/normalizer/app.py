@@ -53,6 +53,8 @@ DEDUP_DB_PATH = os.getenv('DEDUP_DB_PATH', '/data/dedup.db')
 PIPELINE_VERSION = os.getenv('PIPELINE_VERSION', 'normalizer.v1.0')
 
 # Global state
+# Note: These globals are safe as consume_loop processes events sequentially
+# and health_server only reads them
 shutdown_event = Event()
 is_healthy = False
 stats = {
@@ -61,7 +63,7 @@ stats = {
     'dlq_count': 0,
     'errors': 0
 }
-last_success_timestamp = 0
+last_success_timestamp = time.time()  # Initialize to current time to avoid large initial value
 
 # Prometheus metrics
 metrics_raw_events_consumed = Counter('normalizer_raw_events_consumed_total', 'Total raw events consumed from Kafka')

@@ -49,10 +49,12 @@ HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8000'))
 DEDUP_STATE_FILE = os.getenv('DEDUP_STATE_FILE', '/data/seen_items.json')
 
 # Global state
+# Note: These globals are safe as polling_loop runs in a single thread
+# and health_server only reads them
 shutdown_event = Event()
 is_healthy = False
 seen_items: Set[str] = set()
-last_success_timestamp = 0
+last_success_timestamp = time.time()  # Initialize to current time to avoid large initial value
 
 # Prometheus metrics
 metrics_items_fetched = Counter('rss_ingestor_items_fetched_total', 'Total items fetched from RSS feeds')
