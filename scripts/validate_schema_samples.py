@@ -64,6 +64,7 @@ def validate_all_samples(repo_root: Path) -> int:
         ("raw_event.v1.json", "raw_event_valid.json"),
         ("normalized_event.v1.json", "normalized_event_valid.json"),
         ("enriched_event.v1.json", "enriched_event_valid.json"),
+        ("features.v1.json", "features_v1_valid.json"),
     ]
     
     print("Validating schema samples...\n")

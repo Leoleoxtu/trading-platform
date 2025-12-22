@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trading-platform.local/schemas/features.v1.json",
+  "title": "Feature Vector v1",
+  "description": "Schema for versioned feature vectors combining market and NLP/event features for backtesting and trading agents",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "feature_id",
+    "instrument_id",
+    "timeframe",
+    "ts_utc",
+    "feature_set_version",
+    "features",
+    "quality_flags",
+    "computed_at_utc",
+    "pipeline_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "features.v1",
+      "description": "Schema version identifier"
+    },
+    "feature_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this feature vector (UUID v4)"
+    },
+    "instrument_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Trading symbol or ticker (e.g., AAPL, BTC)"
+    },
+    "timeframe": {
+      "type": "string",
+      "pattern": "^[0-9]+[mhd]$",
+      "description": "Timeframe for features (e.g., 1m, 5m, 1h, 1d)"
+    },
+    "ts_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the candle/feature in UTC (RFC3339 format)"
+    },
+    "feature_set_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Immutable version of the feature set (e.g., fs_v1, fs_v1.1)"
+    },
+    "features": {
+      "type": "object",
+      "description": "Computed feature values (all numeric)",
+      "properties": {
+        "ret_1": {
+          "type": "number",
+          "description": "Simple return over 1 period: (close_t / close_{t-1}) - 1"
+        },
+        "ret_5": {
+          "type": "number",
+          "description": "Simple return over 5 periods: (close_t / close_{t-5}) - 1"
+        },
+        "vol_20": {
+          "type": "number",
+          "description": "Rolling volatility (standard deviation of ret_1 over 20 periods)"
+        },
+        "atr_14": {
+          "type": "number",
+          "description": "Average True Range over 14 periods (optional)"
+        },
+        "volume_z_20": {
+          "type": "number",
+          "description": "Z-score of volume over 20 periods (optional)"
+        },
+        "event_count_1h": {
+          "type": "number",
+          "description": "Number of enriched events in the 1-hour window ending at ts_utc"
+        },
+        "sentiment_mean_1h": {
+          "type": "number",
+          "description": "Mean sentiment score in the 1-hour window"
+        },
+        "sentiment_std_1h": {
+          "type": "number",
+          "description": "Standard deviation of sentiment scores in the 1-hour window (optional)"
+        },
+        "sentiment_weighted_1h": {
+          "type": "number",
+          "description": "Confidence-weighted mean sentiment in the 1-hour window (optional)"
+        },
+        "sentiment_conf_mean_1h": {
+          "type": "number",
+          "description": "Mean sentiment confidence in the 1-hour window (optional)"
+        }
+      },
+      "additionalProperties": false,
+      "minProperties": 1
+    },
+    "source_refs": {
+      "type": "object",
+      "description": "References to source data (optional, keep size manageable)",
+      "properties": {
+        "ohlcv_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of OHLCV candles used"
+        },
+        "event_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of enriched events used"
+        },
+        "event_window_start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start of event aggregation window"
+        },
+        "event_window_end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End of event aggregation window"
+        }
+      },
+      "additionalProperties": false
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "MISSING_OHLCV",
+          "INSUFFICIENT_OHLCV",
+          "NO_EVENTS",
+          "LOW_EVENT_COUNT",
+          "LOW_SENTIMENT_CONFIDENCE",
+          "TIMESTAMP_MISMATCH",
+          "COMPUTATION_ERROR"
+        ]
+      },
+      "uniqueItems": true,
+      "description": "Quality indicators for this feature vector"
+    },
+    "computed_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when features were computed (RFC3339 format)"
+    },
+    "pipeline_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of the feature store pipeline (e.g., feature-store.v1)"
+    }
+  },
+  "additionalProperties": false
+}

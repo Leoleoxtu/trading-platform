@@ -11,6 +11,7 @@ All events in the platform follow versioned JSON Schema contracts:
 - **`schemas/raw_event.v1.json`**: Schema for raw events from all sources
 - **`schemas/normalized_event.v1.json`**: Schema for normalized events
 - **`schemas/enriched_event.v1.json`**: Schema for NLP-enriched events
+- **`schemas/features.v1.json`**: Schema for feature vectors (market + NLP features)
 
 See [`schemas/README.md`](../schemas/README.md) for detailed schema documentation, versioning strategy, and validation.
 
@@ -63,24 +64,40 @@ See [`schemas/README.md`](../schemas/README.md) for detailed schema documentatio
    - Profile: `apps`
    - See: `docs/30_enrichment.md`
 
+### Data Services (Phase 1.4+)
+
+9. **market-ingestor** - Market data ingestion service
+   - Port: 8004 (health endpoint)
+   - Purpose: Fetch and store OHLCV market data in TimescaleDB
+   - Profile: `apps`, `data`
+   - See: `docs/90_operations.md`
+
+10. **feature-store** - Feature engineering service
+    - Port: 8006 (health endpoint)
+    - Purpose: Compute and store versioned feature vectors combining market and NLP data
+    - Profile: `apps`, `data`
+    - See: `docs/50_feature_store.md`
+
 ### Tools (Phase 1.6)
 
-9. **replayer** - Replay/Backfill tool
-   - Purpose: Republish raw events from MinIO to Kafka for reproducibility testing and backfilling
-   - Profile: `tools` (on-demand, not a daemon)
-   - Usage: `docker compose --profile tools run --rm replayer <args>`
-   - See: `docs/40_replay_backfill.md`
+11. **replayer** - Replay/Backfill tool
+    - Purpose: Republish raw events from MinIO to Kafka for reproducibility testing and backfilling
+    - Profile: `tools` (on-demand, not a daemon)
+    - Usage: `docker compose --profile tools run --rm replayer <args>`
+    - See: `docs/40_replay_backfill.md`
 
 ## Data Flow (Target Architecture)
 
 The platform is designed to handle the following data flow:
 
 ```
-External Sources → Raw Events → Normalized Events → Enriched Events → Analytics
-                      ↓              ↓                    ↓
-                   raw.events.v1  events.normalized.v1  events.enriched.v1
-                      ↓              ↓                    ↓
-                   S3: raw-events  S3: pipeline-artifacts  S3: pipeline-artifacts
+External Sources → Raw Events → Normalized Events → Enriched Events → Feature Vectors → Trading
+                      ↓              ↓                    ↓                  ↓
+                   raw.events.v1  events.normalized.v1  events.enriched.v1  
+                      ↓              ↓                    ↓                  ↓
+                   S3: raw-events  S3: pipeline-artifacts  S3: artifacts    TimescaleDB
+                   
+Market Data → TimescaleDB (OHLCV) → Feature Store → Feature Vectors → Backtesting/Agents
 ```
 
 ### Stage Descriptions
