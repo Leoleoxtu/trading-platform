@@ -29,7 +29,8 @@ fi
 create_bucket() {
   local bucket_name=$1
   
-  if mc ls local | grep -q "${bucket_name}"; then
+  # Check if bucket exists (ignore errors)
+  if mc stat local/${bucket_name} &>/dev/null; then
     echo "Bucket '${bucket_name}' already exists - skipping"
   else
     echo "Creating bucket '${bucket_name}'..."

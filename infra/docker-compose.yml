@@ -16,15 +16,15 @@ services:
       - "0"
       - --check=false
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:9092
+      - internal://0.0.0.0:29092,external://0.0.0.0:9092
       - --advertise-kafka-addr
-      - PLAINTEXT://localhost:9092
+      - internal://redpanda:29092,external://localhost:9092
     ports:
       - "${REDPANDA_PORT:-9092}:9092"
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD", "rpk", "cluster", "info", "--brokers", "localhost:9092"]
+      test: ["CMD", "rpk", "cluster", "info", "--brokers", "redpanda:29092"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -57,7 +57,7 @@ services:
         condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local-redpanda
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
     ports:
       - "${KAFKA_UI_PORT:-8080}:8080"
 

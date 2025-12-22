@@ -8,7 +8,7 @@ MAX_RETRIES=30
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if rpk cluster info --brokers localhost:9092 &>/dev/null; then
+  if rpk cluster info --brokers redpanda:29092 &>/dev/null; then
     echo "Redpanda is ready!"
     break
   fi
@@ -27,12 +27,15 @@ create_topic() {
   local topic_name=$1
   local partitions=$2
   
-  if rpk topic list --brokers localhost:9092 | grep -q "^${topic_name}$"; then
+  if rpk topic list --brokers redpanda:29092 | grep -q "^${topic_name}[[:space:]]"; then
     echo "Topic '${topic_name}' already exists - skipping"
   else
     echo "Creating topic '${topic_name}' with ${partitions} partitions..."
-    rpk topic create "${topic_name}" --partitions "${partitions}" --brokers localhost:9092
-    echo "Topic '${topic_name}' created successfully"
+    if rpk topic create "${topic_name}" --partitions "${partitions}" --brokers redpanda:29092 2>&1 | grep -q "TOPIC_ALREADY_EXISTS"; then
+      echo "Topic '${topic_name}' already exists (created concurrently) - skipping"
+    else
+      echo "Topic '${topic_name}' created successfully"
+    fi
   fi
 }
 
@@ -48,4 +51,4 @@ echo "All topics initialized successfully!"
 
 # List all topics for verification
 echo "Current topics:"
-rpk topic list --brokers localhost:9092
+rpk topic list --brokers redpanda:29092
