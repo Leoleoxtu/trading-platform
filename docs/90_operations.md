@@ -58,6 +58,8 @@ docker exec -it redpanda rpk topic list
 Expected output:
 ```
 NAME                      PARTITIONS  REPLICAS
+events.enriched.dlq.v1    1           1
+events.enriched.v1        6           1
 events.normalized.dlq.v1  1           1
 events.normalized.v1      6           1
 raw.events.dlq.v1         1           1
@@ -150,7 +152,17 @@ echo '{"event_id":"test123","source":"manual","timestamp":"2024-01-15T10:00:00Z"
 ### Consume Messages from Kafka
 
 ```bash
+# Consume raw events
 docker exec -it redpanda rpk topic consume raw.events.v1 --num 10
+
+# Consume normalized events
+docker exec -it redpanda rpk topic consume events.normalized.v1 --num 10
+
+# Consume enriched events
+docker exec -it redpanda rpk topic consume events.enriched.v1 --num 10
+
+# Check DLQ for failures
+docker exec -it redpanda rpk topic consume events.enriched.dlq.v1 --num 10
 ```
 
 ### Upload File to MinIO
@@ -469,6 +481,13 @@ docker compose ps
 # Detailed health information
 docker inspect redpanda | grep -A 20 Health
 docker inspect minio | grep -A 20 Health
+
+# Application service health endpoints
+curl http://localhost:8001/health  # RSS Ingestor
+curl http://localhost:8002/health  # Normalizer
+curl http://localhost:8003/health  # Reddit Ingestor
+curl http://localhost:8004/health  # Market Ingestor
+curl http://localhost:8005/health  # NLP Enricher
 ```
 
 ### Resource Usage
@@ -543,6 +562,8 @@ docker exec -it redpanda rpk topic list --brokers redpanda:29092
 **Expected output:**
 ```
 NAME                      PARTITIONS  REPLICAS
+events.enriched.dlq.v1    1           1
+events.enriched.v1        6           1
 events.normalized.dlq.v1  1           1
 events.normalized.v1      6           1
 raw.events.dlq.v1         1           1
@@ -730,8 +751,75 @@ Validating schema samples...
 
 ✓ raw_event_valid.json is valid against raw_event.v1.json
 ✓ normalized_event_valid.json is valid against normalized_event.v1.json
+✓ enriched_event_valid.json is valid against enriched_event.v1.json
 
 All validations passed! ✓
+```
+
+### Test 16: Verify NLP Enricher Health
+
+```bash
+curl http://localhost:8005/health
+```
+
+**Expected output:**
+```json
+{
+  "status": "healthy",
+  "service": "nlp-enricher",
+  "stats": {
+    "consumed": 0,
+    "enriched": 0,
+    "failed": 0,
+    "dlq_count": 0
+  }
+}
+```
+
+### Test 17: Verify Enriched Events Generated
+
+Wait 1-2 minutes after normalized events appear, then:
+
+```bash
+docker exec -it redpanda rpk topic consume events.enriched.v1 -n 5
+```
+
+**Expected output:**
+- JSON messages with `schema_version: "enriched_event.v1"`
+- Valid `event_id` matching normalized events
+- `entities` array with extracted named entities
+- `tickers` array with validated symbols
+- `sentiment` object with score and confidence
+- `event_category` classification
+
+### Test 18: Verify Enriched Events in MinIO
+
+```bash
+docker run --rm --network infra_trading-platform minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && \
+         mc ls --recursive local/pipeline-artifacts/enriched/ | head -10'
+```
+
+**Expected output:**
+- List of JSON files in `enriched/source=<type>/dt=YYYY-MM-DD/` partitions
+- File names are UUIDs with `.json` extension
+
+### Test 19: Run End-to-End Enrichment Test
+
+```bash
+python3 scripts/test_enrichment_e2e.py
+```
+
+**Expected output:**
+```
+🧪 NLP Enrichment Service - End-to-End Tests
+======================================================================
+📋 Test 1: Validating enriched event schema...
+✅ Enriched event schema validation passed
+...
+Result: 6/6 tests passed
+======================================================================
+🎉 All tests passed!
 ```
 
 ## Event Validation Commands
@@ -779,6 +867,26 @@ docker exec -it redpanda rpk topic consume events.normalized.v1 -f json | \
   jq -r '.value.symbols_candidates[]' | sort | uniq -c | sort -rn | head -20
 ```
 
+### Consume Enriched Events with Filter
+
+```bash
+# Filter by event category
+docker exec -it redpanda rpk topic consume events.enriched.v1 -f json | \
+  grep '"event_category":"earnings"' | head -5
+
+# Extract sentiment scores
+docker exec -it redpanda rpk topic consume events.enriched.v1 -f json | \
+  jq -r '.value.sentiment.score' | sort -n | tail -10
+
+# View entities extracted
+docker exec -it redpanda rpk topic consume events.enriched.v1 -f json | \
+  jq -r '.value.entities[] | "\(.type): \(.text)"' | head -20
+
+# Count events by category
+docker exec -it redpanda rpk topic consume events.enriched.v1 -f json | \
+  jq -r '.value.event_category' | sort | uniq -c | sort -rn
+```
+
 ### Search Event by ID in Kafka UI
 
 1. Open http://localhost:8080
@@ -823,6 +931,28 @@ curl http://localhost:8001/health | jq .
 
 # Normalizer
 curl http://localhost:8002/health | jq .
+
+# NLP Enricher
+curl http://localhost:8005/health | jq .
+```
+
+### Check Prometheus Metrics
+
+```bash
+# RSS Ingestor metrics
+curl http://localhost:8001/metrics | grep rss_ingestor
+
+# Normalizer metrics
+curl http://localhost:8002/metrics | grep normalizer
+
+# NLP Enricher metrics
+curl http://localhost:8005/metrics | grep nlp_enricher
+
+# View enrichment throughput
+curl http://localhost:8005/metrics | grep nlp_enricher_events_enriched_total
+
+# View sentiment drift
+curl http://localhost:8005/metrics | grep nlp_enricher_sentiment_mean
 ```
 
 ### Monitor Kafka Consumer Groups
