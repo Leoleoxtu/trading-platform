@@ -55,7 +55,7 @@ TICKER_WHITELIST = os.getenv('TICKER_WHITELIST',
     'BTC,ETH,BNB,XRP,ADA,DOGE,SOL,DOT,MATIC'
 )
 PIPELINE_VERSION = os.getenv('PIPELINE_VERSION', 'nlp-enricher.v1.0')
-HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8004'))
+HEALTH_PORT = int(os.getenv('HEALTH_PORT', '8000'))
 USE_SPACY = os.getenv('USE_SPACY', 'false').lower() == 'true'
 
 # Parse ticker whitelist
@@ -104,6 +104,9 @@ ENRICHED_SCHEMA = load_schema('/app/schemas/enriched_event.v1.json')
 
 # Initialize sentiment analyzer
 sentiment_analyzer = SentimentIntensityAnalyzer()
+
+# Compile regex patterns at module level for better performance
+CAPITALIZED_PATTERN = re.compile(r'(?<=[.!?]\s)([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)|(?<=\s)([A-Z][A-Z]+(?:\s[A-Z]+)*)')
 
 # Initialize spaCy if enabled
 spacy_nlp = None
@@ -188,9 +191,8 @@ def extract_entities_heuristic(text: str) -> List[Dict]:
     entities = []
     
     # Find capitalized phrases (potential organizations/persons)
-    # Pattern: capitalized words that are not at the start of sentences
-    capitalized_pattern = r'(?<=[.!?]\s)([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)|(?<=\s)([A-Z][A-Z]+(?:\s[A-Z]+)*)'
-    matches = re.finditer(capitalized_pattern, text)
+    # Pattern compiled at module level for performance
+    matches = CAPITALIZED_PATTERN.finditer(text)
     
     for match in matches:
         text_match = match.group()
