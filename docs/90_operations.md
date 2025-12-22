@@ -508,6 +508,82 @@ docker compose up init-minio
 
 The scripts are idempotent - they won't recreate existing topics/buckets.
 
+## Acceptance Tests
+
+The following tests confirm the infrastructure is working correctly:
+
+### Test 1: Start Infrastructure
+
+```bash
+cd infra
+docker compose up -d
+```
+
+**Expected result:**
+- All services start successfully
+- Healthchecks pass for Redpanda and MinIO
+- Init services complete and exit with code 0
+
+### Test 2: Verify Topics Created
+
+```bash
+docker exec -it redpanda rpk topic list --brokers redpanda:29092
+```
+
+**Expected output:**
+```
+NAME                      PARTITIONS  REPLICAS
+events.normalized.dlq.v1  1           1
+events.normalized.v1      6           1
+raw.events.dlq.v1         1           1
+raw.events.v1             6           1
+```
+
+### Test 3: Verify Buckets Created
+
+```bash
+docker run --rm --network infra_default minio/mc \
+  sh -c 'mc alias set local http://minio:9000 minioadmin minioadmin123 && mc ls local'
+```
+
+**Expected output:**
+```
+[YYYY-MM-DD HH:MM:SS UTC]     0B pipeline-artifacts/
+[YYYY-MM-DD HH:MM:SS UTC]     0B raw-events/
+```
+
+### Test 4: Kafka UI Accessible
+
+Navigate to http://localhost:8080
+
+**Expected result:**
+- Kafka UI loads successfully
+- Cluster "local-redpanda" shows as online
+- Topics page displays all 4 topics with correct partition counts
+
+### Test 5: MinIO Console Accessible
+
+Navigate to http://localhost:9001
+
+**Expected result:**
+- MinIO console login page loads
+- Can login with `minioadmin` / `minioadmin123`
+- Browser shows both buckets: `raw-events` and `pipeline-artifacts`
+
+### Test 6: Idempotence
+
+```bash
+cd infra
+docker compose up init-topics --force-recreate
+docker compose up init-minio --force-recreate
+```
+
+**Expected result:**
+- Both services run successfully
+- Topics/buckets are detected as existing and skipped
+- No errors occur
+- Services exit with code 0
+
 ## Next Steps
 
 After verifying the infrastructure works:
