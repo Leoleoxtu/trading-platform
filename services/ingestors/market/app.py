@@ -18,6 +18,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, List, Optional, Tuple
 
 import yfinance as yf
+import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2 import sql
@@ -295,18 +296,38 @@ def fetch_ohlcv_data(
             # Convert pandas Timestamp to Python datetime in UTC
             ts = idx.to_pydatetime()
             if ts.tzinfo is None:
+                # Naive timestamp - assume UTC
                 ts = ts.replace(tzinfo=timezone.utc)
             else:
+                # Convert to UTC if timezone-aware
                 ts = ts.astimezone(timezone.utc)
             
-            data.append((
-                ts,
-                float(row['Open']),
-                float(row['High']),
-                float(row['Low']),
-                float(row['Close']),
-                float(row['Volume'])
-            ))
+            # Convert values to float with error handling
+            try:
+                open_val = float(row['Open']) if not pd.isna(row['Open']) else None
+                high_val = float(row['High']) if not pd.isna(row['High']) else None
+                low_val = float(row['Low']) if not pd.isna(row['Low']) else None
+                close_val = float(row['Close']) if not pd.isna(row['Close']) else None
+                volume_val = float(row['Volume']) if not pd.isna(row['Volume']) else None
+                
+                # Skip rows with missing critical data
+                if any(v is None for v in [open_val, high_val, low_val, close_val, volume_val]):
+                    logger.warning(json.dumps({
+                        'message': 'Skipping row with missing data',
+                        'ticker': ticker,
+                        'timestamp': ts.isoformat()
+                    }))
+                    continue
+                
+                data.append((ts, open_val, high_val, low_val, close_val, volume_val))
+            except (ValueError, TypeError) as e:
+                logger.warning(json.dumps({
+                    'message': 'Failed to convert row to numeric values',
+                    'ticker': ticker,
+                    'timestamp': ts.isoformat(),
+                    'error': str(e)
+                }))
+                continue
         
         logger.info(json.dumps({
             'message': 'Data fetched successfully',

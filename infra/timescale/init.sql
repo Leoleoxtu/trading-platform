@@ -93,12 +93,34 @@ GRANT USAGE, SELECT ON SEQUENCE ohlcv_quality_log_id_seq TO market;
 
 -- Enable compression on older chunks (optional, for production)
 -- Compress data older than 30 days
--- Uncomment if needed for production:
+-- 
+-- Benefits:
+--   - Reduces disk space usage by 90%+ for older data
+--   - Minimal impact on query performance for compressed chunks
+--   - Automatic compression in background
+--
+-- Considerations:
+--   - Only enable after evaluating storage needs
+--   - Compressed chunks are read-only (no updates/deletes)
+--   - Monitor compression job performance
+--
+-- To enable:
 -- SELECT add_compression_policy('ohlcv', INTERVAL '30 days');
 
 -- Enable retention policy (optional, for production)
 -- Drop chunks older than 2 years
--- Uncomment if needed for production:
+--
+-- Benefits:
+--   - Automatic cleanup of old data
+--   - Prevents unbounded growth
+--   - Reduces maintenance overhead
+--
+-- Considerations:
+--   - Ensure backup/archive strategy for dropped data
+--   - Adjust interval based on requirements
+--   - Consider regulatory/compliance needs
+--
+-- To enable:
 -- SELECT add_retention_policy('ohlcv', INTERVAL '2 years');
 
 -- Success message

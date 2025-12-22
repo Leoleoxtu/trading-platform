@@ -195,15 +195,23 @@ def test_ohlcv_data_present():
             
             if total_rows == 0:
                 print("  ⚠ No OHLCV data found yet (service may still be fetching)")
-                print("  Waiting 30 seconds for data ingestion...")
-                time.sleep(30)
+                print("  Waiting for data ingestion with retries (up to 2 minutes)...")
                 
-                # Check again
-                cur.execute("SELECT COUNT(*) FROM ohlcv;")
-                total_rows = cur.fetchone()[0]
+                # Retry up to 4 times with 30-second intervals
+                for attempt in range(4):
+                    time.sleep(30)
+                    cur.execute("SELECT COUNT(*) FROM ohlcv;")
+                    total_rows = cur.fetchone()[0]
+                    
+                    if total_rows > 0:
+                        print(f"  ✓ Data found after {(attempt + 1) * 30} seconds")
+                        break
+                    else:
+                        print(f"  ⚠ No data yet (attempt {attempt + 1}/4)")
                 
                 if total_rows == 0:
-                    print("  ✗ Still no data after waiting")
+                    print("  ✗ Still no data after waiting 2 minutes")
+                    print("  Note: This may be normal if Yahoo Finance is not accessible")
                     conn.close()
                     return False
             
