@@ -2,6 +2,7 @@ services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: redpanda
+    profiles: ["infra", "apps"]
     command:
       - redpanda
       - start
@@ -29,10 +30,13 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - trading-platform
 
   minio:
     image: minio/minio:latest
     container_name: minio
+    profiles: ["infra", "apps"]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -48,10 +52,13 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - trading-platform
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
+    profiles: ["infra", "apps"]
     depends_on:
       redpanda:
         condition: service_healthy
@@ -60,10 +67,13 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
     ports:
       - "${KAFKA_UI_PORT:-8080}:8080"
+    networks:
+      - trading-platform
 
   init-topics:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     container_name: init-topics
+    profiles: ["infra", "apps"]
     depends_on:
       redpanda:
         condition: service_healthy
@@ -71,10 +81,13 @@ services:
       - ./redpanda/init-topics.sh:/init-topics.sh
     entrypoint: ["/bin/bash", "/init-topics.sh"]
     restart: "no"
+    networks:
+      - trading-platform
 
   init-minio:
     image: minio/mc:latest
     container_name: init-minio
+    profiles: ["infra", "apps"]
     depends_on:
       minio:
         condition: service_healthy
@@ -85,7 +98,86 @@ services:
       - ./minio/init-buckets.sh:/init-buckets.sh
     entrypoint: ["/bin/bash", "/init-buckets.sh"]
     restart: "no"
+    networks:
+      - trading-platform
+
+  rss-ingestor:
+    build:
+      context: ../services/ingestors/rss
+      dockerfile: Dockerfile
+    container_name: rss-ingestor
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+      init-minio:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_TOPIC_RAW: raw.events.v1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET_RAW: raw-events
+      RSS_FEEDS: ${RSS_FEEDS:-https://feeds.feedburner.com/TechCrunch/}
+      RSS_POLL_SECONDS: ${RSS_POLL_SECONDS:-60}
+      HEALTH_PORT: 8000
+      DEDUP_STATE_FILE: /data/seen_items.json
+    volumes:
+      - rss_ingestor_data:/data
+      - ../schemas:/app/schemas:ro
+    ports:
+      - "8001:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
+  normalizer:
+    build:
+      context: ../services/normalizer
+      dockerfile: Dockerfile
+    container_name: normalizer
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+      init-minio:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_TOPIC_RAW: raw.events.v1
+      KAFKA_TOPIC_NORMALIZED: events.normalized.v1
+      KAFKA_TOPIC_DLQ: events.normalized.dlq.v1
+      KAFKA_CONSUMER_GROUP: normalizer-v1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      HEALTH_PORT: 8000
+      DEDUP_DB_PATH: /data/dedup.db
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-normalizer.v1.0}
+    volumes:
+      - normalizer_data:/data
+      - ../schemas:/app/schemas:ro
+    ports:
+      - "8002:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
+networks:
+  trading-platform:
+    driver: bridge
 
 volumes:
   redpanda_data:
   minio_data:
+  rss_ingestor_data:
+  normalizer_data:
