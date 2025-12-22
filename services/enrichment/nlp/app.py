@@ -16,7 +16,7 @@ import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Thread, Event
+from threading import Thread, Event, Lock
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional, Dict, List, Tuple
 import re
@@ -73,6 +73,7 @@ stats = {
 last_success_timestamp = time.time()
 sentiment_sum = 0.0
 sentiment_count = 0
+sentiment_lock = Lock()  # Thread-safe access to sentiment stats
 
 # Prometheus metrics
 metrics_consumed = Counter('nlp_enricher_events_consumed_total', 'Total events consumed')
@@ -110,7 +111,12 @@ enriched_validator = Draft202012Validator(ENRICHED_SCHEMA)
 sentiment_analyzer = SentimentIntensityAnalyzer()
 
 # Compile regex patterns at module level for better performance
+# Pattern 1: Capitalized words after sentence boundaries
+# Pattern 2: All-caps sequences that may be acronyms/tickers
 CAPITALIZED_PATTERN = re.compile(r'(?<=[.!?]\s)([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)|(?<=\s)([A-Z][A-Z]+(?:\s[A-Z]+)*)')
+
+# Constants for entity extraction
+MIN_ENTITY_LENGTH = 2  # Minimum character length for valid entities
 
 # Initialize spaCy if enabled
 spacy_nlp = None
@@ -199,7 +205,7 @@ def extract_entities_heuristic(text: str) -> List[Dict]:
     
     for match in matches:
         text_match = match.group()
-        if len(text_match) > 2:  # Skip single letters
+        if len(text_match) > MIN_ENTITY_LENGTH:  # Skip very short matches
             # Simple heuristic: if all caps, likely ORG, otherwise could be PERSON
             entity_type = 'ORG' if text_match.isupper() else 'OTHER'
             entities.append({
@@ -446,10 +452,10 @@ def enrich_event(normalized_event: dict, producer, s3_client) -> bool:
         elif sentiment['confidence'] < 0.5:
             metrics_low_confidence.labels(kind='sentiment').inc()
         
-        # Update sentiment mean for drift detection
-        sentiment_sum += sentiment['score']
-        sentiment_count += 1
-        if sentiment_count > 0:
+        # Update sentiment mean for drift detection (thread-safe)
+        with sentiment_lock:
+            sentiment_sum += sentiment['score']
+            sentiment_count += 1
             metrics_sentiment_mean.set(sentiment_sum / sentiment_count)
         
         # Categorize event
