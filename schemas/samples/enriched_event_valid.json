@@ -1,0 +1,54 @@
+{
+  "schema_version": "enriched_event.v1",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "enriched_at_utc": "2024-01-15T10:32:00Z",
+  "pipeline_version": "nlp-enricher.v1.0",
+  "source_type": "rss",
+  "source_name": "TechCrunch RSS Feed",
+  "event_time_utc": "2024-01-15T10:00:00Z",
+  "canonical_url": "https://techcrunch.com/2024/01/15/example-article",
+  "lang": "en",
+  "normalized_text_hash": "b4c6d8e0f2a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f5a7b9c1d3e5f7a9b1c3",
+  "entities": [
+    {
+      "type": "ORG",
+      "text": "Apple",
+      "confidence": 0.95
+    },
+    {
+      "type": "ORG",
+      "text": "Microsoft",
+      "confidence": 0.92
+    },
+    {
+      "type": "PERSON",
+      "text": "Tim Cook",
+      "confidence": 0.88
+    },
+    {
+      "type": "PRODUCT",
+      "text": "iPhone",
+      "confidence": 0.90
+    }
+  ],
+  "tickers": [
+    {
+      "symbol": "AAPL",
+      "confidence": 0.95,
+      "method": "validated"
+    },
+    {
+      "symbol": "MSFT",
+      "confidence": 0.90,
+      "method": "validated"
+    }
+  ],
+  "sentiment": {
+    "score": 0.65,
+    "confidence": 0.82,
+    "model": "vader"
+  },
+  "event_category": "product",
+  "embedding": null,
+  "quality_flags": ["has_symbols", "high_confidence"]
+}
