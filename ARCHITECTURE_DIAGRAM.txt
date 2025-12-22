@@ -1,0 +1,287 @@
+# Trading Platform Architecture - Phase 1.3 with Reddit Ingestor
+
+## Overall System Architecture
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           EXTERNAL DATA SOURCES                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  RSS Feeds          Reddit API (PRAW)         [Future: Twitter, etc.]       │
+└────┬────────────────────┬────────────────────────────────────────────────────┘
+     │                    │
+     ▼                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              INGESTOR LAYER                                  │
+├──────────────────────────┬──────────────────────────────────────────────────┤
+│  RSS Ingestor            │  Reddit Ingestor                                  │
+│  (Port 8001)             │  (Port 8003)                                      │
+│                          │                                                   │
+│  • Polls RSS feeds       │  • Polls subreddits (via PRAW)                   │
+│  • Dedup (JSON)          │  • Dedup (JSON): reddit:{kind}:{id}              │
+│  • Stores in MinIO       │  • Stores in MinIO                               │
+│  • Publishes to Kafka    │  • Publishes to Kafka                            │
+│  • /health, /metrics     │  • /health, /metrics                             │
+│                          │  • Modes: submissions/comments/both              │
+└──────────┬───────────────┴──────────────┬───────────────────────────────────┘
+           │                              │
+           └──────────────┬───────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          STORAGE & MESSAGING                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────┐         ┌─────────────────────────┐           │
+│  │  MinIO (S3-compatible)  │         │  Redpanda (Kafka)       │           │
+│  │  Port 9000 / 9001       │         │  Port 9092              │           │
+│  │                         │         │                         │           │
+│  │  Buckets:               │         │  Topics:                │           │
+│  │  • raw-events           │         │  • raw.events.v1        │           │
+│  │    - source=rss/...     │         │  • raw.events.dlq.v1    │           │
+│  │    - source=reddit/...  │         │  • events.normalized.v1 │           │
+│  │  • pipeline-artifacts   │         │  • events.normalized... │           │
+│  └─────────────────────────┘         └─────────────────────────┘           │
+│                                                                              │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PROCESSING LAYER                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Normalizer (Port 8002)                                                      │
+│                                                                              │
+│  • Consumes from raw.events.v1                                              │
+│  • Normalizes events (RSS, Reddit, etc.)                                    │
+│  • Publishes to events.normalized.v1                                        │
+│  • DLQ for failed events                                                    │
+│  • /health, /metrics                                                        │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         OBSERVABILITY LAYER                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────┐        ┌──────────────────┐      ┌─────────────────┐ │
+│  │  Prometheus      │───────▶│  Grafana         │      │  Kafka UI       │ │
+│  │  Port 9090       │        │  Port 3001       │      │  Port 8080      │ │
+│  │                  │        │                  │      │                 │ │
+│  │  Scrapes metrics │        │  Dashboards:     │      │  Browse topics  │ │
+│  │  from:           │        │  • Pipeline      │      │  View messages  │ │
+│  │  • RSS Ingestor  │        │    Health        │      │                 │ │
+│  │  • Reddit        │        │  • Reddit panels │      │                 │ │
+│  │    Ingestor      │        │  • RSS panels    │      │                 │ │
+│  │  • Normalizer    │        │  • Normalizer    │      │                 │ │
+│  │  • Kafka         │        │    panels        │      │                 │ │
+│  └──────────────────┘        └──────────────────┘      └─────────────────┘ │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+## Reddit Ingestor Data Flow (Detailed)
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                       REDDIT INGESTOR INTERNAL FLOW                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Step 1: Poll Reddit
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  PRAW Client                        │
+│  • subreddit.new(limit=50)          │
+│  • subreddit.comments(limit=50)     │
+│  • Based on REDDIT_MODE config      │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+Step 2: Deduplication Check
+                  │
+┌─────────────────▼───────────────────┐
+│  Dedup Key: reddit:{kind}:{id}      │
+│  • In-memory set (fast lookup)      │
+│  • Persistent JSON file             │
+│  • Survives container restart       │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼ (if new)
+Step 3: Store Raw in MinIO
+                  │
+┌─────────────────▼───────────────────┐
+│  MinIO Storage                      │
+│  Key: source=reddit/dt=2024-01-15/  │
+│       {event_id}.json               │
+│  Content:                           │
+│  • kind, id, permalink, url         │
+│  • title (submission) / body        │
+│  • author, created_utc, subreddit   │
+│  • score, num_comments, etc.        │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+Step 4: Create RawEvent v1
+                  │
+┌─────────────────▼───────────────────┐
+│  RawEvent Schema Validation         │
+│  {                                  │
+│    schema_version: "raw_event.v1"   │
+│    event_id: uuid                   │
+│    source_type: "reddit"            │
+│    source_name: subreddit           │
+│    captured_at_utc: timestamp       │
+│    event_time_utc: created_utc      │
+│    raw_uri: s3://...                │
+│    raw_hash: sha256(content)        │
+│    content_type: "application/json" │
+│    priority: "MEDIUM"               │
+│    correlation_id: uuid             │
+│    metadata: {                      │
+│      subreddit, kind, reddit_id,    │
+│      permalink, title (optional)    │
+│    }                                │
+│  }                                  │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+Step 5: Publish to Kafka
+                  │
+┌─────────────────▼───────────────────┐
+│  Kafka Topic: raw.events.v1         │
+│  • Partitioned by hash              │
+│  • Acks='all' (reliable)            │
+│  • Retries=3                        │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+Step 6: Update Metrics & Logs
+                  │
+┌─────────────────▼───────────────────┐
+│  Prometheus Metrics                 │
+│  • items_fetched_total{kind}        │
+│  • raw_events_published_total       │
+│  • last_success_timestamp           │
+│                                     │
+│  Structured Logs                    │
+│  • JSON format                      │
+│  • correlation_id for tracing       │
+└─────────────────────────────────────┘
+
+
+## Grafana Dashboard Layout
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                        PIPELINE HEALTH DASHBOARD                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐       │
+│  │  Throughput - Events/sec     │  │  DLQ - Events/sec            │       │
+│  │  • RSS events published      │  │  • DLQ events                │       │
+│  │  • Normalized events         │  │                              │       │
+│  └──────────────────────────────┘  └──────────────────────────────┘       │
+│                                                                             │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐                      │
+│  │ DLQ     │  │ Consumer│  │ RSS     │  │ Normaliz│                      │
+│  │ Count   │  │ Lag     │  │ Status  │  │ Status  │                      │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘                      │
+│                                                                             │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐       │
+│  │  Normalizer Processing       │  │  RSS Ingestor Latency        │       │
+│  │  Latency                     │  │                              │       │
+│  └──────────────────────────────┘  └──────────────────────────────┘       │
+│                                                                             │
+│  ┌──────────────────────────────┐  ┌──────────────────────────────┐       │
+│  │  Deduplication Rate          │  │  Deduplication Hit Ratio     │       │
+│  └──────────────────────────────┘  └──────────────────────────────┘       │
+│                                                                             │
+│  ┌─────────┐  ┌─────────┐  ┌──────────────────────────────┐              │
+│  │ RSS Last│  │Normaliz │  │ Consumer Lag by Partition    │              │
+│  │ Success │  │Last Succ│  │                              │              │
+│  └─────────┘  └─────────┘  └──────────────────────────────┘              │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────┐     │
+│  │                    REDDIT INGESTOR PANELS (NEW)                  │     │
+│  ├──────────────────────────────────────────────────────────────────┤     │
+│  │                                                                   │     │
+│  │  ┌──────────────────────────────┐  ┌──────────────────────────┐ │     │
+│  │  │  Reddit Throughput           │  │  Reddit Errors           │ │     │
+│  │  │  • Events/sec                │  │  • By reason (api, minio,│ │     │
+│  │  │  • rate(...[5m])             │  │    kafka, schema)        │ │     │
+│  │  └──────────────────────────────┘  └──────────────────────────┘ │     │
+│  │                                                                   │     │
+│  │  ┌──────────────────────────────┐  ┌──────────────────────────┐ │     │
+│  │  │  Reddit Dedup Hits           │  │  Reddit Last Success Age │ │     │
+│  │  │  • Duplicate items/sec       │  │  • Seconds since last OK │ │     │
+│  │  └──────────────────────────────┘  └──────────────────────────┘ │     │
+│  │                                                                   │     │
+│  └──────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+
+## Configuration Flow
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         CONFIGURATION SOURCES                               │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. infra/.env (User Configuration)                                        │
+│     │                                                                       │
+│     ├─▶ REDDIT_CLIENT_ID=...                                               │
+│     ├─▶ REDDIT_CLIENT_SECRET=...                                           │
+│     ├─▶ REDDIT_USER_AGENT=trading-platform-ingestor/1.0                    │
+│     ├─▶ REDDIT_SUBREDDITS=wallstreetbets,stocks,investing                  │
+│     ├─▶ REDDIT_MODE=submissions  # or comments, or both                    │
+│     ├─▶ REDDIT_POLL_SECONDS=60                                             │
+│     ├─▶ REDDIT_LIMIT_PER_POLL=50                                           │
+│     └─▶ REDDIT_PRIORITY=MEDIUM                                             │
+│                                                                             │
+│  2. docker-compose.yml (Service Definition)                                │
+│     │                                                                       │
+│     └─▶ reddit-ingestor service                                            │
+│         • Reads from .env                                                  │
+│         • Exposes port 8003                                                │
+│         • Mounts schemas volume                                            │
+│         • Creates dedup volume                                             │
+│                                                                             │
+│  3. schemas/raw_event.v1.json (Schema Validation)                          │
+│     │                                                                       │
+│     └─▶ Validates all outgoing events                                      │
+│         • source_type: "reddit" (allowed)                                  │
+│         • Required fields enforced                                         │
+│         • additionalProperties: false                                      │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+
+## Error Handling Flow
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         ERROR HANDLING STRATEGY                             │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  API Error (Reddit)                                                        │
+│  │                                                                          │
+│  ├─▶ Log error                                                             │
+│  ├─▶ Increment: reddit_ingestor_raw_events_failed_total{reason="api"}     │
+│  └─▶ Continue to next item                                                 │
+│                                                                             │
+│  MinIO Error                                                               │
+│  │                                                                          │
+│  ├─▶ Log error                                                             │
+│  ├─▶ Increment: reddit_ingestor_raw_events_failed_total{reason="minio"}   │
+│  └─▶ Skip publishing to Kafka (no raw data)                               │
+│                                                                             │
+│  Kafka Error                                                               │
+│  │                                                                          │
+│  ├─▶ Log error                                                             │
+│  ├─▶ Increment: reddit_ingestor_raw_events_failed_total{reason="kafka"}   │
+│  ├─▶ Raw data already in MinIO (can replay)                               │
+│  └─▶ Retry up to 3 times                                                  │
+│                                                                             │
+│  Schema Validation Error                                                   │
+│  │                                                                          │
+│  ├─▶ Log error with details                                               │
+│  ├─▶ Increment: reddit_ingestor_raw_events_failed_total{reason="schema"}  │
+│  └─▶ Don't publish (invalid event)                                        │
+│                                                                             │
+│  Service continues running in all cases - no crashes on individual errors  │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
