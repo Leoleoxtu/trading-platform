@@ -27,6 +27,8 @@ docker compose ps
 | **RSS Ingestor** | http://localhost:8001 | Health/metrics endpoints |
 | **Normalizer** | http://localhost:8002 | Health/metrics endpoints |
 | **Reddit Ingestor** | http://localhost:8003 | Health/metrics endpoints |
+| **Market Ingestor** | http://localhost:8004 | Health/metrics endpoints |
+| **TimescaleDB** | localhost:5432 | PostgreSQL with TimescaleDB extension |
 | **Prometheus** | http://localhost:9090 | Metrics and queries |
 | **Grafana** | http://localhost:3001 | Dashboards (admin/admin) |
 
@@ -53,6 +55,7 @@ docker compose ps
 - **[Overview](docs/00_overview.md)** - Architecture, data flow, and conventions
 - **[Ingestion - RSS](docs/10_ingestion.md)** - RSS feed ingestion service
 - **[Ingestion - Reddit](docs/15_reddit_ingestion.md)** - Reddit submissions and comments ingestion
+- **[Ingestion - Market Data](services/ingestors/market/README.md)** - OHLCV market data from Yahoo Finance
 - **[Normalization](docs/20_normalization.md)** - Event normalization service
 - **[Operations Guide](docs/90_operations.md)** - Commands, troubleshooting, and acceptance tests
 
@@ -110,6 +113,7 @@ This infrastructure is ready for connecting:
 - **RSS Ingestor**: Polls RSS feeds and publishes to Kafka
 - **Reddit Ingestor**: Collects Reddit submissions/comments via PRAW
 - **Normalizer**: Normalizes events from various sources
+- **Market Ingestor**: Fetches OHLCV market data from Yahoo Finance into TimescaleDB
 - **Observability**: Prometheus + Grafana with comprehensive dashboards
 
 ## Support
