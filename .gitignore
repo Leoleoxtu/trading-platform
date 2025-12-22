@@ -1,0 +1,12 @@
+# Environment files
+infra/.env
+
+# Logs
+*.log
+
+# Docker volumes
+docker-volumes/
+
+# OS files
+.DS_Store
+Thumbs.db

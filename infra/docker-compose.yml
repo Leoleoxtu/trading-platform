@@ -9,44 +9,82 @@ services:
       - --smp
       - "1"
       - --memory
-      - 1G
+      - ${REDPANDA_MEMORY:-1G}
       - --reserve-memory
       - 0M
       - --node-id
       - "0"
       - --check=false
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:9092
+      - internal://0.0.0.0:29092,external://0.0.0.0:9092
       - --advertise-kafka-addr
-      - PLAINTEXT://localhost:9092
+      - internal://redpanda:29092,external://localhost:9092
     ports:
-      - "9092:9092"
+      - "${REDPANDA_PORT:-9092}:9092"
     volumes:
       - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "--brokers", "redpanda:29092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   minio:
     image: minio/minio:latest
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     depends_on:
-      - redpanda
+      redpanda:
+        condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local-redpanda
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
     ports:
-      - "8080:8080"
+      - "${KAFKA_UI_PORT:-8080}:8080"
+
+  init-topics:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: init-topics
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    volumes:
+      - ./redpanda/init-topics.sh:/init-topics.sh
+    entrypoint: ["/bin/bash", "/init-topics.sh"]
+    restart: "no"
+
+  init-minio:
+    image: minio/mc:latest
+    container_name: init-minio
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    volumes:
+      - ./minio/init-buckets.sh:/init-buckets.sh
+    entrypoint: ["/bin/bash", "/init-buckets.sh"]
+    restart: "no"
 
 volumes:
   redpanda_data:
