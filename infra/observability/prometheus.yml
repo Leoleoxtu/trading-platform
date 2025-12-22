@@ -39,3 +39,12 @@ scrape_configs:
           service: 'kafka-exporter'
     scrape_interval: 15s
     metrics_path: '/metrics'
+
+  - job_name: 'market-ingestor'
+    static_configs:
+      - targets: ['market-ingestor:8000']
+        labels:
+          service: 'market-ingestor'
+          source_type: 'market'
+    scrape_interval: 10s
+    metrics_path: '/metrics'

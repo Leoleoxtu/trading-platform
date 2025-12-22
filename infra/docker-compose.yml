@@ -267,6 +267,56 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    profiles: ["infra", "data"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-market}
+      POSTGRES_USER: ${POSTGRES_USER:-market}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-market_secret_change_me}
+    ports:
+      - "${TIMESCALE_PORT:-5432}:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./timescale/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market} -d ${POSTGRES_DB:-market}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
+  market-ingestor:
+    build:
+      context: ../services/ingestors/market
+      dockerfile: Dockerfile
+    container_name: market-ingestor
+    profiles: ["apps", "data"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: timescaledb
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-market}
+      POSTGRES_USER: ${POSTGRES_USER:-market}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-market_secret_change_me}
+      MARKET_TICKERS: ${MARKET_TICKERS:-AAPL,MSFT,TSLA}
+      MARKET_TIMEFRAMES: ${MARKET_TIMEFRAMES:-1m,5m,1d}
+      MARKET_LOOKBACK_DAYS: ${MARKET_LOOKBACK_DAYS:-30}
+      MARKET_REFRESH_SECONDS: ${MARKET_REFRESH_SECONDS:-300}
+      MARKET_ADJUSTED: ${MARKET_ADJUSTED:-true}
+      HEALTH_PORT: 8000
+    ports:
+      - "8004:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
 networks:
   trading-platform:
     driver: bridge
@@ -279,3 +329,4 @@ volumes:
   reddit_ingestor_data:
   prometheus_data:
   grafana_data:
+  timescale_data:
