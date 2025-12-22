@@ -356,6 +356,29 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  replayer:
+    build:
+      context: ../services/tools/replayer
+      dockerfile: Dockerfile
+    container_name: replayer
+    profiles: ["tools"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_TOPIC_RAW: raw.events.v1
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_BUCKET_RAW: raw-events
+    volumes:
+      - ../schemas:/app/schemas:ro
+    networks:
+      - trading-platform
+
 networks:
   trading-platform:
     driver: bridge
