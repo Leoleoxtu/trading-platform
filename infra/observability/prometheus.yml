@@ -56,3 +56,11 @@ scrape_configs:
           service: 'nlp-enricher'
     scrape_interval: 10s
     metrics_path: '/metrics'
+
+  - job_name: 'feature-store'
+    static_configs:
+      - targets: ['feature-store:8000']
+        labels:
+          service: 'feature-store'
+    scrape_interval: 10s
+    metrics_path: '/metrics'

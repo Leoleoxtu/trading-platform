@@ -280,6 +280,7 @@ services:
     volumes:
       - timescale_data:/var/lib/postgresql/data
       - ./timescale/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./timescale/feature_store_init.sql:/docker-entrypoint-initdb.d/feature_store_init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market} -d ${POSTGRES_DB:-market}"]
       interval: 10s
@@ -352,6 +353,41 @@ services:
       - ../schemas:/app/schemas:ro
     ports:
       - "8005:8000"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
+  feature-store:
+    build:
+      context: ../services/features/feature-store
+      dockerfile: Dockerfile
+    container_name: feature-store
+    profiles: ["apps", "data"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_HOST: timescaledb
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-market}
+      POSTGRES_USER: ${POSTGRES_USER:-market}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-market_secret_change_me}
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      ENRICHED_TOPIC: events.enriched.v1
+      FEATURE_TICKERS: ${FEATURE_TICKERS:-AAPL,MSFT,TSLA}
+      FEATURE_TIMEFRAMES: ${FEATURE_TIMEFRAMES:-1m,1d}
+      FEATURE_SET_VERSION: ${FEATURE_SET_VERSION:-fs_v1}
+      FEATURE_REFRESH_SECONDS: ${FEATURE_REFRESH_SECONDS:-60}
+      FEATURE_LOOKBACK_PERIODS: ${FEATURE_LOOKBACK_PERIODS:-200}
+      FEATURE_EVENT_WINDOW_MINUTES: ${FEATURE_EVENT_WINDOW_MINUTES:-60}
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-feature-store.v1.0}
+      HEALTH_PORT: 8000
+    ports:
+      - "8006:8000"
     networks:
       - trading-platform
     restart: unless-stopped

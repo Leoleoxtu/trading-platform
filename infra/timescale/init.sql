@@ -126,7 +126,10 @@ GRANT USAGE, SELECT ON SEQUENCE ohlcv_quality_log_id_seq TO market;
 -- Success message
 DO $$
 BEGIN
-    RAISE NOTICE 'TimescaleDB initialization complete!';
+    RAISE NOTICE 'TimescaleDB OHLCV initialization complete!';
     RAISE NOTICE 'Created tables: ohlcv, ohlcv_quality_log';
     RAISE NOTICE 'Created materialized view: ohlcv_latest';
 END $$;
+
+-- Include Feature Store initialization
+\i /docker-entrypoint-initdb.d/feature_store_init.sql

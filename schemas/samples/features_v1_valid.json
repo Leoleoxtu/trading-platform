@@ -1,0 +1,27 @@
+{
+  "schema_version": "features.v1",
+  "feature_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "instrument_id": "AAPL",
+  "timeframe": "1h",
+  "ts_utc": "2024-12-22T15:00:00Z",
+  "feature_set_version": "fs_v1",
+  "features": {
+    "ret_1": 0.0025,
+    "ret_5": 0.0134,
+    "vol_20": 0.0156,
+    "event_count_1h": 3,
+    "sentiment_mean_1h": 0.15,
+    "sentiment_std_1h": 0.22,
+    "sentiment_weighted_1h": 0.18,
+    "sentiment_conf_mean_1h": 0.85
+  },
+  "source_refs": {
+    "ohlcv_count": 25,
+    "event_count": 3,
+    "event_window_start": "2024-12-22T14:00:00Z",
+    "event_window_end": "2024-12-22T15:00:00Z"
+  },
+  "quality_flags": [],
+  "computed_at_utc": "2024-12-22T15:05:00Z",
+  "pipeline_version": "feature-store.v1.0"
+}
