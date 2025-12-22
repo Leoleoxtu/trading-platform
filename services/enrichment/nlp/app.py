@@ -102,6 +102,10 @@ def load_schema(schema_path: str) -> dict:
 NORMALIZED_SCHEMA = load_schema('/app/schemas/normalized_event.v1.json')
 ENRICHED_SCHEMA = load_schema('/app/schemas/enriched_event.v1.json')
 
+# Initialize validators at module level for better performance
+normalized_validator = Draft202012Validator(NORMALIZED_SCHEMA)
+enriched_validator = Draft202012Validator(ENRICHED_SCHEMA)
+
 # Initialize sentiment analyzer
 sentiment_analyzer = SentimentIntensityAnalyzer()
 
@@ -190,8 +194,7 @@ def extract_entities_heuristic(text: str) -> List[Dict]:
     """Extract entities using simple heuristics."""
     entities = []
     
-    # Find capitalized phrases (potential organizations/persons)
-    # Pattern compiled at module level for performance
+    # Use pre-compiled regex pattern for performance
     matches = CAPITALIZED_PATTERN.finditer(text)
     
     for match in matches:
@@ -313,9 +316,17 @@ def categorize_event(text: str, source_type: str) -> str:
 
 
 def validate_schema(data: dict, schema: dict, schema_name: str) -> Tuple[bool, Optional[str]]:
-    """Validate data against JSON schema."""
+    """Validate data against JSON schema using cached validator."""
     try:
-        validator = Draft202012Validator(schema)
+        # Use cached validators for better performance
+        if schema_name == 'normalized_event.v1':
+            validator = normalized_validator
+        elif schema_name == 'enriched_event.v1':
+            validator = enriched_validator
+        else:
+            # Fallback for unknown schemas
+            validator = Draft202012Validator(schema)
+        
         validator.validate(data)
         return True, None
     except jsonschema.ValidationError as e:
