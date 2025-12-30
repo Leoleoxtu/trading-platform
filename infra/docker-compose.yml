@@ -241,10 +241,11 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     networks:
@@ -414,6 +415,19 @@ services:
       - ../schemas:/app/schemas:ro
     networks:
       - trading-platform
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    profiles: ["admin-tools"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - trading-platform
+    restart: unless-stopped
 
 networks:
   trading-platform:
