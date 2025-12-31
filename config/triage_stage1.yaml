@@ -1,0 +1,222 @@
+# Triage Stage 1 Configuration
+# Deterministic routing rules for event triage
+
+# Keywords configuration
+keywords:
+  # Strong market-moving keywords - high impact
+  strong:
+    - earnings
+    - sec
+    - fed
+    - fomc
+    - merger
+    - acquisition
+    - bankruptcy
+    - hack
+    - breach
+    - guidance
+    - recall
+    - ipo
+    - dividend
+    - split
+    - delisting
+    - shutdown
+    - fda approval
+    - settlement
+    - scandal
+    - investigation
+  
+  # Weak signals - lower confidence
+  weak:
+    - rumor
+    - reported
+    - might
+    - could
+    - sources say
+    - alleged
+    - claims
+    - suggests
+    - according to
+    - unconfirmed
+    - speculation
+  
+  # Clickbait patterns - penalizes score
+  clickbait:
+    - shocking
+    - you wont believe
+    - this one trick
+    - revealed
+    - secrets
+    - insider
+    - must see
+    - breaking
+    - watch this
+    - exclusive
+
+# Source scoring by type and name
+# Format: source_type -> source_name -> {reliability: 0..1, noise: 0..1}
+source_scores:
+  rss:
+    bloomberg:
+      reliability: 0.95
+      noise: 0.05
+    reuters:
+      reliability: 0.95
+      noise: 0.05
+    wsj:
+      reliability: 0.93
+      noise: 0.08
+    ft:
+      reliability: 0.93
+      noise: 0.08
+    cnbc:
+      reliability: 0.88
+      noise: 0.12
+    marketwatch:
+      reliability: 0.85
+      noise: 0.15
+    seeking_alpha:
+      reliability: 0.70
+      noise: 0.30
+    zerohedge:
+      reliability: 0.50
+      noise: 0.45
+    seeking_alpha_blog:
+      reliability: 0.60
+      noise: 0.35
+  
+  reddit:
+    wallstreetbets:
+      reliability: 0.40
+      noise: 0.60
+    stocks:
+      reliability: 0.50
+      noise: 0.50
+    investing:
+      reliability: 0.55
+      noise: 0.45
+  
+  twitter:
+    default:
+      reliability: 0.45
+      noise: 0.55
+    # Specific handles can override default
+  
+  news_api:
+    default:
+      reliability: 0.70
+      noise: 0.25
+  
+  web_scrape:
+    default:
+      reliability: 0.50
+      noise: 0.40
+  
+  market:
+    yfinance:
+      reliability: 0.90
+      noise: 0.05
+    polygon:
+      reliability: 0.92
+      noise: 0.03
+  
+  # Unknown source defaults
+  default:
+    reliability: 0.30
+    noise: 0.60
+
+# Thresholds for bucket assignment
+thresholds:
+  # FAST bucket (immediate processing)
+  fast_score_min: 70
+  
+  # STANDARD bucket (normal processing)
+  standard_score_min: 40
+  
+  # Below 40 goes to COLD
+  # DROP_HARD triggered by specific conditions
+
+# Text analysis constraints
+text_analysis:
+  max_length: 5000  # Maximum characters analyzed
+  min_length: 10    # Minimum length before rejection
+  truncation_penalty: -5  # Score penalty if truncated
+
+# Recency scoring
+recency:
+  # Scoring based on how recent the event is
+  very_recent_seconds: 300      # Within 5 min → +10 points
+  recent_seconds: 3600          # Within 1h → +5 points
+  recent_decay_hours: 24        # Score decays after 24h
+
+# Deduplication
+deduplication:
+  enabled: true
+  ttl_seconds: 86400  # 24 hours
+  backend: redis      # or sqlite, file
+  # If duplicate recently seen:
+  duplicate_score_penalty: -15
+  duplicate_bucket_override: COLD  # Force to COLD instead of dropping
+
+# Scoring weights (0-100 total)
+scoring:
+  # Component weights (sum can exceed 100, then normalized)
+  source_reliability_weight: 35    # Strong factor
+  strong_keywords_weight: 25       # High impact keywords
+  ticker_candidates_weight: 15     # Has stock tickers
+  numbers_money_weight: 10         # Financial indicators
+  recency_weight: 10               # How recent
+  
+  # Penalties (negative adjustments)
+  source_noise_penalty: 20
+  clickbait_penalty: 15
+  short_text_penalty: 10
+  duplicate_penalty: 15
+  unknown_source_penalty: 5
+  lang_unknown_penalty: 8
+
+# DROP_HARD conditions (AND logic - all must be true)
+drop_hard_conditions:
+  # Only drop spam that matches multiple criteria
+  require_all_conditions: true
+  conditions:
+    - empty_or_unreadable_text: true
+    - multiple_spam_indicators: 2  # At least 2 indicators needed
+    - source_reliability_below: 0.20
+    - no_tickers_or_entities: true
+    - clickbait_and_short: true
+
+# Priority mapping
+priority_hints:
+  FAST:
+    high_score: P0      # score >= fast_threshold + 15
+    medium_score: P1    # score >= fast_threshold
+  STANDARD:
+    high_score: P1      # score >= standard_threshold + 10
+    low_score: P2       # score >= standard_threshold
+  COLD:
+    default: P3         # Always P3
+
+# Ticker detection
+ticker_detection:
+  # Pattern for extracting stock tickers
+  regex_pattern: '(?:^|[^a-zA-Z])([A-Z]{1,5})(?:[^a-zA-Z]|$)'
+  # Common false positives to exclude
+  exclude_words:
+    - THE
+    - AND
+    - FOR
+    - ARE
+    - YOU
+    - ALL
+    - CAN
+    - BUT
+    - WAS
+    - NOT
+
+# Feature flags
+features:
+  enable_dedup: true
+  enable_weak_keywords: true
+  enable_clickbait_detection: true
+  enable_ticker_extraction: true

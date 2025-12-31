@@ -1,0 +1,190 @@
+# Triage Stage 2 Configuration
+# NLP-based triage with spaCy NER + FinBERT sentiment
+
+keywords:
+  # Impact keywords (high value, market-moving)
+  impact:
+    earnings: ["earnings", "revenue", "profit", "loss", "guidance", "outlook", "forecast", "Q1", "Q2", "Q3", "Q4", "quarterly", "annual"]
+    regulation: ["SEC", "FDA", "FTC", "DOJ", "antitrust", "investigation", "lawsuit", "fine", "penalty", "regulation"]
+    macro: ["Fed", "Federal Reserve", "interest rate", "inflation", "CPI", "GDP", "employment", "unemployment", "jobs report"]
+    security: ["hack", "breach", "cyberattack", "ransomware", "data leak", "vulnerability", "security flaw"]
+    merger: ["merger", "acquisition", "M&A", "takeover", "buyout", "deal", "bid"]
+    bankruptcy: ["bankruptcy", "chapter 11", "insolvency", "liquidation", "restructuring"]
+  
+  # Weak signals (lower confidence but still relevant)
+  weak:
+    - "rumor"
+    - "sources say"
+    - "might"
+    - "could"
+    - "possibly"
+    - "allegedly"
+    - "unconfirmed"
+
+# Source quality mapping
+source_quality:
+  rss:
+    "bloomberg": {"reliability": 0.95, "noise": 0.05}
+    "reuters": {"reliability": 0.95, "noise": 0.05}
+    "wsj": {"reliability": 0.90, "noise": 0.10}
+    "ft": {"reliability": 0.90, "noise": 0.10}
+    "cnbc": {"reliability": 0.85, "noise": 0.15}
+    "techcrunch": {"reliability": 0.80, "noise": 0.20}
+    "seekingalpha": {"reliability": 0.75, "noise": 0.25}
+    "marketwatch": {"reliability": 0.75, "noise": 0.25}
+  reddit:
+    "wallstreetbets": {"reliability": 0.50, "noise": 0.70}
+    "stocks": {"reliability": 0.60, "noise": 0.50}
+    "investing": {"reliability": 0.65, "noise": 0.45}
+  twitter:
+    "verified": {"reliability": 0.70, "noise": 0.40}
+    "unverified": {"reliability": 0.40, "noise": 0.80}
+  news_api:
+    "default": {"reliability": 0.70, "noise": 0.30}
+  web_scraper:
+    "default": {"reliability": 0.65, "noise": 0.40}
+
+# Scoring weights and limits
+scoring:
+  weights:
+    keywords_max: 30          # Maximum points from keywords
+    source_quality_max: 25    # Maximum points from source quality
+    ticker_confidence_max: 20 # Maximum points from ticker validation
+    entity_strength_max: 10   # Maximum points from NER entities
+    sentiment_impact_max: 15  # Maximum points from sentiment
+  
+  # Keyword scoring
+  keyword_scores:
+    impact_keyword: 15        # Per high-impact keyword
+    weak_keyword: 5           # Per weak signal keyword
+  
+  # Entity scoring
+  entity_scores:
+    ORG: 4
+    PERSON: 3
+    PRODUCT: 2
+    MONEY: 3
+    PERCENT: 3
+  
+  # Sentiment impact
+  sentiment:
+    strong_threshold: 0.7     # |score| > 0.7 = strong sentiment
+    conf_threshold: 0.8       # confidence > 0.8 = reliable
+    penalty_low_conf: 5       # Penalty if confidence < threshold
+
+# Priority thresholds (baseline, will be adjusted by regime)
+thresholds:
+  baseline:
+    P0: 80  # score >= 80 → P0
+    P1: 60  # score >= 60 → P1
+    P2: 40  # score >= 40 → P2
+    # score < 40 → P3
+  
+  # Regime adjustments (additive)
+  market_regime:
+    STRESS:    # Market stress → lower thresholds (more P0/P1)
+      P0: -10
+      P1: -10
+      P2: -10
+    NORMAL:    # No adjustment
+      P0: 0
+      P1: 0
+      P2: 0
+    CALM:      # Market calm → higher thresholds (less P0/P1)
+      P0: +5
+      P1: +5
+      P2: +5
+  
+  load_regime:
+    HIGH_LOAD:  # Pipeline overloaded → higher thresholds (push to P3)
+      P0: +5
+      P1: +5
+      P2: +5
+    NORMAL_LOAD:
+      P0: 0
+      P1: 0
+      P2: 0
+    LOW_LOAD:   # Pipeline underutilized → slightly lower thresholds
+      P0: -3
+      P1: -3
+      P2: -3
+
+# Market regime detection
+market_regime:
+  vix_thresholds:
+    STRESS: 25    # VIX >= 25 = STRESS
+    CALM: 12      # VIX < 12 = CALM
+    # 12 <= VIX < 25 = NORMAL
+  
+  # Fallback: SPY volatility if VIX unavailable
+  spy_volatility_thresholds:
+    STRESS: 0.025   # 30D volatility >= 2.5%
+    CALM: 0.008     # 30D volatility < 0.8%
+
+# Load regime detection
+load_regime:
+  consumer_lag_threshold:
+    HIGH_LOAD: 5000      # lag > 5000 messages
+    NORMAL_LOAD: 1000    # 1000 < lag <= 5000
+    # lag <= 1000 = LOW_LOAD
+  
+  latency_p95_threshold_ms:
+    HIGH_LOAD: 500       # p95 latency > 500ms
+    NORMAL_LOAD: 200     # 200ms < p95 <= 500ms
+    # p95 <= 200ms contributes to LOW_LOAD
+  
+  dlq_rate_threshold:
+    HIGH_LOAD: 0.05      # DLQ rate > 5%
+    NORMAL_LOAD: 0.01    # 1% < DLQ rate <= 5%
+
+# NLP processing settings
+nlp:
+  # spaCy models
+  spacy_models:
+    en: "en_core_web_sm"
+    fr: "fr_core_news_sm"
+    default: "en_core_web_sm"
+  
+  # Text processing
+  max_text_length: 1000       # Truncate beyond this (add TEXT_TRUNCATED flag)
+  min_text_length: 20         # Below this → LOW_TEXT flag
+  
+  # FinBERT settings
+  finbert:
+    model_name: "ProsusAI/finbert"
+    max_length: 512
+    batch_size: 8              # Batch inference for performance
+    device: "cpu"              # Use "cuda" if GPU available
+  
+  # Entity confidence thresholds
+  entity_confidence_threshold: 0.5  # Filter entities below this
+
+# Ticker validation
+tickers:
+  whitelist_file: "/etc/tickers_whitelist.csv"  # Path to ticker whitelist
+  confidence_threshold: 0.6                      # Minimum confidence to accept ticker
+  max_tickers_per_event: 5                       # Limit tickers extracted
+
+# Kafka settings
+kafka:
+  bootstrap_servers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"
+  input_topic: "events.stage1.fast.v1,events.stage1.standard.v1"  # Consume from multiple
+  input_group: "triage-nlp-v1"
+  output_topic: "events.triaged.v1"
+  dlq_topic: "events.triaged.dlq.v1"
+  consumer_timeout_ms: 1000
+  max_poll_records: 100
+  enable_auto_commit: false
+
+# Health & monitoring
+health:
+  port: 8007
+  
+metrics:
+  port: 8007
+  path: "/metrics"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "json"

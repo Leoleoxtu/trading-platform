@@ -1,0 +1,54 @@
+symbol,name,exchange
+AAPL,Apple Inc.,NASDAQ
+MSFT,Microsoft Corporation,NASDAQ
+GOOGL,Alphabet Inc.,NASDAQ
+AMZN,Amazon.com Inc.,NASDAQ
+NVDA,NVIDIA Corporation,NASDAQ
+TSLA,Tesla Inc.,NASDAQ
+META,Meta Platforms Inc.,NASDAQ
+BRK.B,Berkshire Hathaway Inc.,NYSE
+V,Visa Inc.,NYSE
+JNJ,Johnson & Johnson,NYSE
+WMT,Walmart Inc.,NYSE
+JPM,JPMorgan Chase & Co.,NYSE
+PG,Procter & Gamble Company,NYSE
+MA,Mastercard Incorporated,NYSE
+HD,Home Depot Inc.,NYSE
+DIS,Walt Disney Company,NYSE
+BAC,Bank of America Corporation,NYSE
+NFLX,Netflix Inc.,NASDAQ
+ADBE,Adobe Inc.,NASDAQ
+CRM,Salesforce Inc.,NYSE
+CSCO,Cisco Systems Inc.,NASDAQ
+PFE,Pfizer Inc.,NYSE
+INTC,Intel Corporation,NASDAQ
+CMCSA,Comcast Corporation,NASDAQ
+TMO,Thermo Fisher Scientific Inc.,NYSE
+VZ,Verizon Communications Inc.,NYSE
+ABT,Abbott Laboratories,NYSE
+ORCL,Oracle Corporation,NYSE
+AMD,Advanced Micro Devices Inc.,NASDAQ
+NKE,Nike Inc.,NYSE
+COST,Costco Wholesale Corporation,NASDAQ
+AVGO,Broadcom Inc.,NASDAQ
+ACN,Accenture plc,NYSE
+TXN,Texas Instruments Incorporated,NASDAQ
+DHR,Danaher Corporation,NYSE
+NEE,NextEra Energy Inc.,NYSE
+QCOM,QUALCOMM Incorporated,NASDAQ
+UNH,UnitedHealth Group Incorporated,NYSE
+PM,Philip Morris International Inc.,NYSE
+LIN,Linde plc,NASDAQ
+IBM,International Business Machines Corporation,NYSE
+GS,Goldman Sachs Group Inc.,NYSE
+CAT,Caterpillar Inc.,NYSE
+INTU,Intuit Inc.,NASDAQ
+HON,Honeywell International Inc.,NASDAQ
+BA,Boeing Company,NYSE
+UPS,United Parcel Service Inc.,NYSE
+SBUX,Starbucks Corporation,NASDAQ
+AMGN,Amgen Inc.,NASDAQ
+BKNG,Booking Holdings Inc.,NASDAQ
+SPY,SPDR S&P 500 ETF Trust,NYSE
+QQQ,Invesco QQQ Trust,NASDAQ
+IWM,iShares Russell 2000 ETF,NYSE

@@ -1,0 +1,129 @@
+# Market Data Watchlist Configuration
+# Stocks to monitor for trading signals
+
+# Configuration
+collection:
+  interval_seconds: 60  # 1 minute bars
+  market_hours_only: true
+  market_open: "09:30"  # ET
+  market_close: "16:00"  # ET
+  pre_market: false
+  after_hours: false
+
+# Data sources
+sources:
+  primary: yfinance  # Free, delayed
+  fallback: polygon  # Requires API key, real-time
+  
+polygon:
+  api_key_env: POLYGON_API_KEY
+  enabled: false
+
+# Watchlist
+tickers:
+  # Large Cap Tech (High Priority)
+  - symbol: AAPL
+    name: Apple Inc.
+    priority: high
+    sector: technology
+    
+  - symbol: MSFT
+    name: Microsoft Corporation
+    priority: high
+    sector: technology
+    
+  - symbol: GOOGL
+    name: Alphabet Inc.
+    priority: high
+    sector: technology
+    
+  - symbol: AMZN
+    name: Amazon.com Inc.
+    priority: high
+    sector: technology
+    
+  - symbol: META
+    name: Meta Platforms Inc.
+    priority: high
+    sector: technology
+    
+  - symbol: NVDA
+    name: NVIDIA Corporation
+    priority: high
+    sector: technology
+    
+  - symbol: TSLA
+    name: Tesla Inc.
+    priority: high
+    sector: automotive
+    
+  # Financial Services
+  - symbol: JPM
+    name: JPMorgan Chase
+    priority: medium
+    sector: financial
+    
+  - symbol: BAC
+    name: Bank of America
+    priority: medium
+    sector: financial
+    
+  - symbol: GS
+    name: Goldman Sachs
+    priority: medium
+    sector: financial
+    
+  # Market Indices ETFs
+  - symbol: SPY
+    name: SPDR S&P 500 ETF
+    priority: high
+    sector: etf
+    
+  - symbol: QQQ
+    name: Invesco QQQ Trust
+    priority: high
+    sector: etf
+    
+  - symbol: DIA
+    name: SPDR Dow Jones ETF
+    priority: medium
+    sector: etf
+    
+  - symbol: IWM
+    name: iShares Russell 2000 ETF
+    priority: medium
+    sector: etf
+    
+  # Volatility
+  - symbol: VIX
+    name: CBOE Volatility Index
+    priority: high
+    sector: index
+    
+  # Popular Meme Stocks
+  - symbol: GME
+    name: GameStop Corp.
+    priority: medium
+    sector: retail
+    
+  - symbol: AMC
+    name: AMC Entertainment
+    priority: low
+    sector: entertainment
+    
+  # Crypto-related
+  - symbol: COIN
+    name: Coinbase Global
+    priority: medium
+    sector: crypto
+    
+  - symbol: MSTR
+    name: MicroStrategy
+    priority: low
+    sector: crypto
+    
+  # Additional Tech
+  - symbol: AMD
+    name: Advanced Micro Devices
+    priority: medium
+    sector: technology

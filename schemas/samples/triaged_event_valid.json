@@ -1,0 +1,114 @@
+{
+  "schema_version": "triaged_event.v1",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "triaged_at_utc": "2025-12-31T10:30:00Z",
+  "pipeline_version": "triage-stage2.v1.0",
+  "source_type": "rss",
+  "source_name": "bloomberg",
+  "canonical_url": "https://www.bloomberg.com/news/articles/2025-12-31/apple-q4-earnings",
+  "event_time_utc": "2025-12-31T10:00:00Z",
+  "lang": "en",
+  "dedup_key": "bloomberg_apple_q4_earnings_2025",
+  "normalized_text": "Apple Inc. reported Q4 earnings with $123.5B revenue, beating analyst expectations by 8%. Stock surged 5% in after-hours trading.",
+  "normalized_text_hash": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2",
+  "entities": [
+    {
+      "type": "ORG",
+      "text": "Apple Inc.",
+      "confidence": 0.98,
+      "start": 0,
+      "end": 10
+    },
+    {
+      "type": "MONEY",
+      "text": "$123.5B",
+      "confidence": 0.95,
+      "start": 42,
+      "end": 49
+    },
+    {
+      "type": "PERCENT",
+      "text": "8%",
+      "confidence": 0.92,
+      "start": 92,
+      "end": 94
+    },
+    {
+      "type": "PERCENT",
+      "text": "5%",
+      "confidence": 0.93,
+      "start": 113,
+      "end": 115
+    }
+  ],
+  "money_mentions": {
+    "present": true,
+    "amounts": [
+      {
+        "value": 123500000000,
+        "currency": "USD",
+        "text": "$123.5B"
+      }
+    ]
+  },
+  "percent_mentions": {
+    "present": true,
+    "values": [
+      {
+        "value": 8.0,
+        "text": "8%"
+      },
+      {
+        "value": 5.0,
+        "text": "5%"
+      }
+    ]
+  },
+  "tickers": [
+    {
+      "symbol": "AAPL",
+      "confidence": 0.99,
+      "method": "entity_match"
+    }
+  ],
+  "sentiment": {
+    "score": 0.85,
+    "confidence": 0.92,
+    "model": "finbert",
+    "label": "positive"
+  },
+  "triage_score": 92,
+  "priority": "P0",
+  "triage_reasons": [
+    "HIGH_SOURCE_QUALITY",
+    "HAS_VALID_TICKER",
+    "KEYWORD_EARNINGS",
+    "STRONG_SENTIMENT",
+    "HAS_MONEY_MENTION",
+    "HAS_PERCENT_MENTION",
+    "STRONG_ENTITIES"
+  ],
+  "score_breakdown": {
+    "keywords": 30,
+    "source_quality": 25,
+    "ticker_confidence": 20,
+    "entity_strength": 10,
+    "sentiment_impact": 13
+  },
+  "thresholds": {
+    "T0": 80,
+    "T1": 60,
+    "T2": 40
+  },
+  "regime": {
+    "market_regime": "NORMAL",
+    "load_regime": "NORMAL_LOAD",
+    "vix_value": 15.5,
+    "consumer_lag": 120,
+    "p95_latency_ms": 85.3
+  },
+  "quality_flags": [],
+  "stage1_score": 75,
+  "stage1_bucket": "FAST",
+  "processing_time_ms": 245.7
+}

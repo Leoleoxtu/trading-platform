@@ -43,12 +43,32 @@ create_topic() {
 # Create all required topics
 echo "Starting topic creation..."
 
+# Stage 0: Raw events
 create_topic "raw.events.v1" 6
 create_topic "raw.events.dlq.v1" 1
+
+# Stage 0.5: Normalized events
 create_topic "events.normalized.v1" 6
 create_topic "events.normalized.dlq.v1" 1
+
+# Stage 1: Triage buckets
+create_topic "events.stage1.fast.v1" 6
+create_topic "events.stage1.standard.v1" 6
+create_topic "events.stage1.cold.v1" 6
+create_topic "events.stage1.dropped.v1" 1
+create_topic "events.stage1.dlq.v1" 1
+
+# Stage 2: Triage NLP (with sentiment + entities)
+create_topic "events.triaged.v1" 6
+create_topic "events.triaged.dlq.v1" 1
+
+# Stage 3: Enrichment (future)
 create_topic "events.enriched.v1" 6
 create_topic "events.enriched.dlq.v1" 1
+
+# Stage 4: Final signals and orchestration (future)
+create_topic "newscards.v1" 5
+create_topic "signals.final.v1" 3
 
 echo "All topics initialized successfully!"
 

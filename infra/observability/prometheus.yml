@@ -64,3 +64,19 @@ scrape_configs:
           service: 'feature-store'
     scrape_interval: 10s
     metrics_path: '/metrics'
+  - job_name: 'triage-stage1'
+    static_configs:
+      - targets: ['triage-stage1:8006']
+        labels:
+          service: 'triage-stage1'
+          pipeline_stage: 'preprocessing'
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+  - job_name: 'triage-stage2'
+    static_configs:
+      - targets: ['triage-stage2:8008']
+        labels:
+          service: 'triage-stage2'
+          pipeline_stage: 'nlp'
+    scrape_interval: 5s
+    metrics_path: '/metrics'

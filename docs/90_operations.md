@@ -1499,6 +1499,130 @@ The observability stack has minimal impact on the pipeline:
 
 **Recommendation:** Keep observability running in development for continuous monitoring.
 
+---
+
+## Triage Stage 1 Monitoring
+
+### Overview
+
+Le service **Triage Stage 1** effectue un routing déterministe des événements normalisés vers 4 buckets :
+- **FAST** (score ≥ 70) : Événements prioritaires → NLP immédiat
+- **STANDARD** (40-69) : Traitement normal
+- **COLD** (< 40) : Batch/sampling
+- **DROP_HARD** : Spam évident (< 1% typique)
+
+### Lancement du service
+
+```bash
+# Démarrer infra + apps + observability
+cd infra
+docker compose --profile infra --profile apps --profile observability up -d
+
+# Vérifier que triage-stage1 est démarré
+docker compose ps triage-stage1
+
+# Logs du service
+docker compose logs -f triage-stage1
+```
+
+### Vérification des métriques
+
+```bash
+# Health check
+curl http://localhost:8006/health
+
+# Métriques Prometheus
+curl http://localhost:8006/metrics | grep triage_stage1
+```
+
+### Prometheus Targets
+
+Vérifier que **triage-stage1** apparaît en **UP** :
+- URL : http://localhost:9090/targets
+- Job : `triage-stage1`
+- Target : `triage-stage1:8006`
+
+### Grafana Dashboard
+
+- **URL** : http://localhost:3001
+- **Login** : admin / admin
+- **Dashboard** : `Triage Stage 1`
+
+Le dashboard contient 15 panels organisés en 4 sections :
+
+| Section | Panels |
+|---------|--------|
+| Throughput & Routing | Ingest rate, Routed rate par bucket, Bucket share (%) |
+| Performance & Latency | Latency p95/p50, Totals, Last success age, Status |
+| Errors & Quality | Error rate, Dedup hits, DROP_HARD % |
+| Score Distribution | Histogram buckets, Score percentiles |
+
+### Requêtes PromQL Utiles
+
+**1. Taux d'ingestion (events/sec):**
+```promql
+rate(triage_stage1_events_consumed_total[5m])
+```
+
+**2. Distribution par bucket (%):**
+```promql
+sum by(bucket) (rate(triage_stage1_events_routed_total[5m])) 
+  / scalar(sum(rate(triage_stage1_events_routed_total[5m])))
+```
+
+**3. Latence p95 (secondes):**
+```promql
+histogram_quantile(0.95, sum(rate(triage_stage1_processing_duration_seconds_bucket[5m])) by (le))
+```
+
+**4. Taux d'erreur total:**
+```promql
+sum(rate(triage_stage1_events_failed_total[5m]))
+```
+
+**5. Taux de dedup (%):**
+```promql
+(rate(triage_stage1_dedup_hits_total[5m]) / rate(triage_stage1_events_consumed_total[5m])) * 100
+```
+
+**6. Age du dernier succès (secondes):**
+```promql
+time() - triage_stage1_last_success_timestamp
+```
+
+**7. Score médian (p50):**
+```promql
+histogram_quantile(0.50, sum(rate(triage_stage1_score_distribution_bucket[5m])) by (le))
+```
+
+### Alertes recommandées
+
+| Métrique | Seuil | Action |
+|----------|-------|--------|
+| DROP_HARD % | > 2% | Vérifier config keywords/thresholds |
+| Latency p95 | > 100ms | Vérifier Redis/Kafka |
+| Last success age | > 300s | Service probablement DOWN |
+| Error rate | > 0.1/s | Vérifier DLQ et logs |
+
+### Troubleshooting
+
+```bash
+# Service ne démarre pas
+docker compose logs triage-stage1 | tail -50
+
+# Prometheus ne voit pas la target
+curl http://triage-stage1:8006/metrics  # depuis le réseau Docker
+
+# Pas de données dans Grafana
+# 1. Vérifier que des events arrivent dans events.normalized.v1
+docker exec -it redpanda rpk topic consume events.normalized.v1 --num 1
+
+# 2. Vérifier que le consumer group consomme
+docker exec -it redpanda rpk group describe triage-stage1-v1
+```
+
+---
+
 ### Acceptance Test - Observability
 
 Run this test to verify Phase 1.2 is working:

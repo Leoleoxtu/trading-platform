@@ -1,5 +1,7 @@
 # Environment files
 infra/.env
+.env
+*.env
 
 # Logs
 *.log
@@ -32,3 +34,5 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.env
+venv/

@@ -1,0 +1,79 @@
+# AI Provider Configuration - Claude Only
+# Simplified configuration using only Anthropic Claude models
+
+version: "1.0"
+
+providers:
+  # Anthropic Claude (Only Provider)
+  - name: anthropic
+    enabled: true
+    weight: 1.0  # 100% - seul provider actif
+    api_key: ${ANTHROPIC_API_KEY}  # From .env
+    
+    models:
+      fast: claude-haiku-4-5-20251001      # Ultra-fast, < 2s, $0.80/$4.00 per 1M tokens
+      medium: claude-sonnet-4-5-20250929   # Balanced, 2-5s, $3.00/$15.00 per 1M tokens
+      # Note: claude-opus désactivé pour le moment
+    
+    # Rate limits (requests per minute / tokens per minute)
+    rate_limits:
+      rpm: 50
+      tpm: 100000
+    
+    # Retry configuration
+    max_retries: 3
+    timeout: 30
+    
+    # Cost tracking (per 1M tokens)
+    pricing:
+      fast:
+        input: 0.80
+        output: 4.00
+      medium:
+        input: 3.00
+        output: 15.00
+
+# Selection Logic
+selection_strategy:
+  # Model tier selection based on priority
+  tier_mapping:
+    HELD:     fast      # Positions held: fast response critical (Haiku)
+    HIGH:     fast      # High priority events: fast (Haiku)
+    NORMAL:   medium    # Normal priority: balanced (Sonnet)
+    LOW:      medium    # Low priority: balanced (Sonnet)
+  
+  # Fallback behavior (désactivé car un seul provider)
+  fallback:
+    enabled: false
+
+# Budget Controls
+budget:
+  # Daily limits (USD)
+  daily_limit_usd: 100.0  # Limite réduite car uniquement Claude
+  
+  # Alerts
+  alert_at_pct: 80  # Alert when 80% of daily budget used
+  
+  # Per-call limits
+  max_cost_per_call_usd: 0.50  # Limite par appel réduite
+  
+  # Cost tracking window
+  window_hours: 24
+
+# Monitoring
+monitoring:
+  # Log all completions
+  log_completions: true
+  
+  # Track metrics
+  track_latency: true
+  track_tokens: true
+  track_cost: true
+  
+  # Dashboard web temps réel
+  dashboard_enabled: true
+  dashboard_port: 8010
+  
+  # Export to Prometheus
+  prometheus_enabled: true
+  metrics_port: 9091

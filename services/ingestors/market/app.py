@@ -24,6 +24,13 @@ from psycopg2.extras import execute_values
 from psycopg2 import sql
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
+# Configure yfinance to avoid rate limiting
+yf.set_tz_cache_location("/tmp/yfinance_cache")
+# Set user agent to avoid 429 errors
+import requests
+session = requests.Session()
+session.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -267,8 +274,8 @@ def fetch_ohlcv_data(
             'adjusted': adjusted
         }))
         
-        # Fetch data from yfinance
-        stock = yf.Ticker(ticker)
+        # Fetch data from yfinance with custom session to avoid rate limiting
+        stock = yf.Ticker(ticker, session=session)
         df = stock.history(
             period=period,
             interval=yf_interval,
@@ -615,7 +622,7 @@ def ingestion_loop():
                         last_fetch_errors[f'{ticker}_{timeframe}'] = 'fetch_failed'
                     
                     # Small delay between requests to avoid rate limiting
-                    time.sleep(0.5)
+                    time.sleep(2.0)
             
             # Refresh materialized view
             refresh_materialized_view(conn)

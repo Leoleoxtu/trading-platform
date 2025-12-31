@@ -1,0 +1,218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Stage 1 Triage Event",
+  "version": "1.0.0",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "triaged_at_utc",
+    "pipeline_version",
+    "source_type",
+    "triage_score_stage1",
+    "triage_bucket",
+    "priority_hint",
+    "triage_reasons",
+    "signals",
+    "quality_flags"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["stage1_event.v1"],
+      "description": "Schema version identifier"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "description": "Unique event identifier (UUID)"
+    },
+    "triaged_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp when triage was performed"
+    },
+    "pipeline_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Pipeline version (semantic versioning)"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["rss", "reddit", "twitter", "news_api", "web_scrape", "market"],
+      "description": "Type of source"
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of specific source (e.g., 'bloomberg', 'wallstreetbets')"
+    },
+    "event_time_utc": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "UTC timestamp of original event"
+    },
+    "canonical_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "Original URL of event"
+    },
+    "lang": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "Language code (ISO 639-1 with optional region)"
+    },
+    "dedup_key": {
+      "type": ["string", "null"],
+      "description": "Deduplication key from normalized event"
+    },
+    "normalized_text_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of normalized text"
+    },
+    "triage_score_stage1": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Triage score (0-100)"
+    },
+    "triage_bucket": {
+      "type": "string",
+      "enum": ["FAST", "STANDARD", "COLD", "DROP_HARD"],
+      "description": "Routing bucket assignment"
+    },
+    "priority_hint": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2", "P3"],
+      "description": "Priority hint for downstream processing"
+    },
+    "triage_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "HIGH_SOURCE_RELIABILITY",
+          "STRONG_KEYWORDS",
+          "HAS_TICKER_CANDIDATES",
+          "HAS_MONEY_OR_PERCENT",
+          "VERY_RECENT",
+          "HIGH_SOURCE_NOISE",
+          "CLICKBAIT_SUSPECT",
+          "SHORT_TEXT",
+          "LONG_TEXT_TRUNCATED",
+          "DUPLICATE_RECENT",
+          "WEAK_KEYWORDS",
+          "UNKNOWN_SOURCE",
+          "LANG_UNKNOWN",
+          "NO_ENTITIES",
+          "MULTIPLE_TICKERS",
+          "MARKET_HOURS",
+          "AFTER_HOURS",
+          "SPAM_INDICATORS",
+          "LOW_TEXT_QUALITY"
+        ]
+      },
+      "description": "Array of tagging reasons explaining the triage decision"
+    },
+    "signals": {
+      "type": "object",
+      "required": [
+        "text_length",
+        "has_numbers",
+        "has_percent",
+        "has_money",
+        "ticker_candidates_count",
+        "source_reliability",
+        "source_noise",
+        "recency_seconds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text_length": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Character count of analyzed text"
+        },
+        "has_ticker_candidate": {
+          "type": "boolean",
+          "description": "Whether ticker candidates were found"
+        },
+        "ticker_candidates": {
+          "type": ["array", "null"],
+          "items": {"type": "string"},
+          "description": "Detected ticker symbols"
+        },
+        "ticker_candidates_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of detected ticker candidates"
+        },
+        "has_numbers": {
+          "type": "boolean",
+          "description": "Whether text contains numbers"
+        },
+        "has_percent": {
+          "type": "boolean",
+          "description": "Whether text contains percent signs"
+        },
+        "has_money": {
+          "type": "boolean",
+          "description": "Whether text contains money indicators ($, €, etc)"
+        },
+        "keyword_hits": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string",
+            "enum": ["strong", "weak", "clickbait"]
+          },
+          "description": "Categories of keywords matched"
+        },
+        "source_reliability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Source reliability score (0-1)"
+        },
+        "source_noise": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Source noise level (0-1)"
+        },
+        "recency_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds since event occurred (now - event_time)"
+        }
+      }
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "LOW_TEXT",
+          "LANG_UNKNOWN",
+          "CLICKBAIT_SUSPECT",
+          "SPAM_SUSPECT",
+          "DUPLICATE_CONTENT",
+          "ENCODING_ERROR",
+          "TRUNCATED_TEXT"
+        ]
+      },
+      "description": "Quality flags indicating potential issues"
+    },
+    "normalized_event": {
+      "type": ["object", "null"],
+      "description": "Minimal copy of normalized event for reference",
+      "properties": {
+        "event_id": {"type": "string"},
+        "text": {"type": "string"},
+        "url": {"type": "string"},
+        "source": {"type": "string"}
+      }
+    }
+  }
+}

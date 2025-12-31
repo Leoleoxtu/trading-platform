@@ -55,6 +55,25 @@ services:
     networks:
       - trading-platform
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    profiles: ["infra", "apps"]
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -172,6 +191,49 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  triage-stage1:
+    build:
+      context: ../services/preprocessing/triage_stage1
+      dockerfile: Dockerfile
+    container_name: triage-stage1
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+      normalizer:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      KAFKA_INPUT_TOPIC: events.normalized.v1
+      KAFKA_INPUT_GROUP: triage-stage1-v1
+      KAFKA_OUTPUT_FAST: events.stage1.fast.v1
+      KAFKA_OUTPUT_STANDARD: events.stage1.standard.v1
+      KAFKA_OUTPUT_COLD: events.stage1.cold.v1
+      KAFKA_OUTPUT_DROPPED: events.stage1.dropped.v1
+      KAFKA_OUTPUT_DLQ: events.stage1.dlq.v1
+      REDIS_URL: redis://redis:6379
+      CONFIG_PATH: /etc/triage_stage1.yaml
+      HEALTH_PORT: 8006
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-triage_stage1.v1.0}
+      LOG_LEVEL: INFO
+    volumes:
+      - ../config/triage_stage1.yaml:/etc/triage_stage1.yaml:ro
+    ports:
+      - "8006:8006"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   reddit-ingestor:
     build:
       context: ../services/ingestors/reddit
@@ -280,8 +342,9 @@ services:
       - "${TIMESCALE_PORT:-5432}:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
-      - ./timescale/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./timescale/feature_store_init.sql:/docker-entrypoint-initdb.d/feature_store_init.sql:ro
+      - ./timescale/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./timescale/feature_store_init.sql:/docker-entrypoint-initdb.d/02_feature_store_init.sql:ro
+      - ./timescale/trading_system_init.sql:/docker-entrypoint-initdb.d/03_trading_system_init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market} -d ${POSTGRES_DB:-market}"]
       interval: 10s
@@ -358,6 +421,39 @@ services:
       - trading-platform
     restart: unless-stopped
 
+  triage-stage2:
+    build:
+      context: ../services/preprocessing/triage_stage2
+      dockerfile: Dockerfile
+    container_name: triage-stage2
+    profiles: ["apps"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      triage-stage1:
+        condition: service_started
+      init-topics:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
+      REDIS_URL: redis://redis:6379
+      CONFIG_PATH: /etc/triage_stage2.yaml
+      TICKERS_WHITELIST: /etc/tickers_whitelist.csv
+      HEALTH_PORT: 8008
+      PIPELINE_VERSION: ${PIPELINE_VERSION:-triage-stage2.v1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ../config/triage_stage2.yaml:/etc/triage_stage2.yaml:ro
+      - ../config/tickers_whitelist.csv:/etc/tickers_whitelist.csv:ro
+      - ../schemas:/app/schemas:ro
+    ports:
+      - "8009:8008"
+    networks:
+      - trading-platform
+    restart: unless-stopped
+
   feature-store:
     build:
       context: ../services/features/feature-store
@@ -388,7 +484,7 @@ services:
       PIPELINE_VERSION: ${PIPELINE_VERSION:-feature-store.v1.0}
       HEALTH_PORT: 8000
     ports:
-      - "8006:8000"
+      - "8008:8000"
     networks:
       - trading-platform
     restart: unless-stopped
@@ -436,6 +532,7 @@ networks:
 volumes:
   redpanda_data:
   minio_data:
+  redis_data:
   rss_ingestor_data:
   normalizer_data:
   reddit_ingestor_data:

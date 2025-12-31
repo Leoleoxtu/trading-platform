@@ -1,0 +1,197 @@
+# RSS Feed Sources Configuration
+# High-quality financial news and market data sources
+
+sources:
+  # Tier 1: Premium Financial News (High Priority)
+  - name: Bloomberg Markets
+    url: https://feeds.bloomberg.com/markets/news.rss
+    priority: high
+    quality: 9
+    category: markets
+    
+  - name: Reuters Business
+    url: https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best
+    priority: high
+    quality: 9
+    category: business
+    
+  - name: Wall Street Journal Markets
+    url: https://feeds.a.dj.com/rss/RSSMarketsMain.xml
+    priority: high
+    quality: 9
+    category: markets
+    
+  - name: Financial Times
+    url: https://www.ft.com/?format=rss
+    priority: high
+    quality: 9
+    category: finance
+  
+  # Tier 2: Major News Outlets (Medium-High Priority)
+  - name: CNBC Top News
+    url: https://www.cnbc.com/id/100003114/device/rss/rss.html
+    priority: high
+    quality: 8
+    category: business
+    
+  - name: MarketWatch
+    url: https://feeds.marketwatch.com/marketwatch/topstories/
+    priority: high
+    quality: 8
+    category: markets
+    
+  - name: Barrons
+    url: https://feeds.a.dj.com/rss/RSSBarrons.xml
+    priority: high
+    quality: 8
+    category: investing
+    
+  - name: Seeking Alpha Market News
+    url: https://seekingalpha.com/market_currents.xml
+    priority: medium
+    quality: 7
+    category: markets
+  
+  # Tier 3: Technology & Innovation
+  - name: TechCrunch
+    url: https://feeds.feedburner.com/TechCrunch/
+    priority: medium
+    quality: 7
+    category: technology
+    
+  - name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+    priority: medium
+    quality: 7
+    category: technology
+    
+  - name: Ars Technica
+    url: https://feeds.arstechnica.com/arstechnica/index
+    priority: medium
+    quality: 7
+    category: technology
+  
+  # Tier 4: Crypto & Digital Assets
+  - name: CoinDesk
+    url: https://www.coindesk.com/arc/outboundfeeds/rss/
+    priority: medium
+    quality: 7
+    category: crypto
+    
+  - name: Cointelegraph
+    url: https://cointelegraph.com/rss
+    priority: medium
+    quality: 6
+    category: crypto
+    
+  - name: Decrypt
+    url: https://decrypt.co/feed
+    priority: medium
+    quality: 6
+    category: crypto
+  
+  # Tier 5: Business & Economics
+  - name: Economist Business
+    url: https://www.economist.com/business/rss.xml
+    priority: medium
+    quality: 8
+    category: business
+    
+  - name: Forbes Business
+    url: https://www.forbes.com/business/feed/
+    priority: medium
+    quality: 7
+    category: business
+    
+  - name: Business Insider
+    url: https://www.businessinsider.com/rss
+    priority: medium
+    quality: 6
+    category: business
+  
+  # Tier 6: Specialized Finance
+  - name: Zero Hedge
+    url: https://www.zerohedge.com/fullrss2.xml
+    priority: medium
+    quality: 6
+    category: markets
+    
+  - name: Benzinga
+    url: https://www.benzinga.com/feed
+    priority: medium
+    quality: 7
+    category: markets
+    
+  - name: Investing.com
+    url: https://www.investing.com/rss/news.rss
+    priority: medium
+    quality: 7
+    category: markets
+  
+  # Tier 7: Sector Specific
+  - name: Biotech News
+    url: https://www.fiercebiotech.com/rss/xml
+    priority: low
+    quality: 6
+    category: biotech
+    
+  - name: Energy News
+    url: https://www.rigzone.com/news/rss.asp
+    priority: low
+    quality: 6
+    category: energy
+    
+  - name: Real Estate News
+    url: https://www.realtor.com/news/rss
+    priority: low
+    quality: 5
+    category: realestate
+  
+  # Tier 8: Alternative Sources
+  - name: Hacker News
+    url: https://hnrss.org/newest
+    priority: low
+    quality: 5
+    category: technology
+    
+  - name: Reddit r/stocks
+    url: https://www.reddit.com/r/stocks/.rss
+    priority: low
+    quality: 4
+    category: discussion
+    
+  - name: Reddit r/wallstreetbets
+    url: https://www.reddit.com/r/wallstreetbets/.rss
+    priority: low
+    quality: 3
+    category: discussion
+
+# Polling configuration
+polling:
+  interval_seconds: 300  # 5 minutes
+  batch_size: 100
+  timeout_seconds: 30
+  max_retries: 3
+  retry_delay_seconds: 60
+
+# Deduplication settings
+deduplication:
+  enabled: true
+  window_hours: 48
+  max_cache_size: 10000
+
+# Quality filters
+filters:
+  min_quality: 3
+  min_text_length: 100
+  exclude_keywords:
+    - "sponsored"
+    - "advertisement"
+    - "partner content"
+  
+# Archive settings
+archive:
+  enabled: true
+  format: jsonl
+  compression: gzip
+  retention_days: 90

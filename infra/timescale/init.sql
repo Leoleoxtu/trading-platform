@@ -66,6 +66,74 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ====================
+-- CONTINUOUS AGGREGATES
+-- ====================
+
+-- Continuous aggregate for VWAP (Volume Weighted Average Price) - 1 hour buckets
+-- VWAP = SUM(price * volume) / SUM(volume)
+CREATE MATERIALIZED VIEW IF NOT EXISTS ohlcv_vwap_1h
+WITH (timescaledb.continuous) AS
+SELECT
+    instrument_id,
+    timeframe,
+    time_bucket('1 hour', ts) AS bucket,
+    -- OHLC for the bucket
+    FIRST(open, ts) AS open,
+    MAX(high) AS high,
+    MIN(low) AS low,
+    LAST(close, ts) AS close,
+    -- Volume and VWAP
+    SUM(volume) AS total_volume,
+    SUM(close * volume) / NULLIF(SUM(volume), 0) AS vwap,
+    -- Additional stats
+    COUNT(*) AS candle_count
+FROM ohlcv
+GROUP BY instrument_id, timeframe, bucket;
+
+-- Add refresh policy: refresh every 5 minutes for last 2 hours
+SELECT add_continuous_aggregate_policy('ohlcv_vwap_1h',
+    start_offset => INTERVAL '2 hours',
+    end_offset => INTERVAL '5 minutes',
+    schedule_interval => INTERVAL '5 minutes',
+    if_not_exists => TRUE
+);
+
+-- Continuous aggregate for VWAP - 1 day buckets
+CREATE MATERIALIZED VIEW IF NOT EXISTS ohlcv_vwap_1d
+WITH (timescaledb.continuous) AS
+SELECT
+    instrument_id,
+    timeframe,
+    time_bucket('1 day', ts) AS bucket,
+    -- OHLC for the bucket
+    FIRST(open, ts) AS open,
+    MAX(high) AS high,
+    MIN(low) AS low,
+    LAST(close, ts) AS close,
+    -- Volume and VWAP
+    SUM(volume) AS total_volume,
+    SUM(close * volume) / NULLIF(SUM(volume), 0) AS vwap,
+    -- Additional stats
+    COUNT(*) AS candle_count
+FROM ohlcv
+GROUP BY instrument_id, timeframe, bucket;
+
+-- Add refresh policy: refresh every 30 minutes for last 7 days
+SELECT add_continuous_aggregate_policy('ohlcv_vwap_1d',
+    start_offset => INTERVAL '7 days',
+    end_offset => INTERVAL '30 minutes',
+    schedule_interval => INTERVAL '30 minutes',
+    if_not_exists => TRUE
+);
+
+-- Create indexes on continuous aggregates
+CREATE INDEX IF NOT EXISTS idx_ohlcv_vwap_1h_instrument_bucket
+    ON ohlcv_vwap_1h (instrument_id, bucket DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ohlcv_vwap_1d_instrument_bucket
+    ON ohlcv_vwap_1d (instrument_id, bucket DESC);
+
 -- Table for tracking data quality issues
 CREATE TABLE IF NOT EXISTS ohlcv_quality_log (
     id SERIAL PRIMARY KEY,
@@ -129,7 +197,5 @@ BEGIN
     RAISE NOTICE 'TimescaleDB OHLCV initialization complete!';
     RAISE NOTICE 'Created tables: ohlcv, ohlcv_quality_log';
     RAISE NOTICE 'Created materialized view: ohlcv_latest';
+    RAISE NOTICE 'Created continuous aggregates: ohlcv_vwap_1h, ohlcv_vwap_1d';
 END $$;
-
--- Include Feature Store initialization
-\i /docker-entrypoint-initdb.d/feature_store_init.sql

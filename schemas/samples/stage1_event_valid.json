@@ -1,0 +1,43 @@
+{
+  "schema_version": "stage1_event.v1",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "triaged_at_utc": "2024-12-31T15:30:45.123Z",
+  "pipeline_version": "1.0.0",
+  "source_type": "rss",
+  "source_name": "bloomberg",
+  "event_time_utc": "2024-12-31T15:20:00.000Z",
+  "canonical_url": "https://bloomberg.com/news/articles/2024-12-31-apple-earnings-beat",
+  "lang": "en",
+  "dedup_key": "abc123def456",
+  "normalized_text_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "triage_score_stage1": 85,
+  "triage_bucket": "FAST",
+  "priority_hint": "P0",
+  "triage_reasons": [
+    "HIGH_SOURCE_RELIABILITY",
+    "STRONG_KEYWORDS",
+    "HAS_TICKER_CANDIDATES",
+    "HAS_MONEY_OR_PERCENT",
+    "VERY_RECENT"
+  ],
+  "signals": {
+    "text_length": 512,
+    "has_ticker_candidate": true,
+    "ticker_candidates": ["AAPL", "MSFT"],
+    "ticker_candidates_count": 2,
+    "has_numbers": true,
+    "has_percent": true,
+    "has_money": true,
+    "keyword_hits": ["strong"],
+    "source_reliability": 0.95,
+    "source_noise": 0.05,
+    "recency_seconds": 605
+  },
+  "quality_flags": [],
+  "normalized_event": {
+    "event_id": "550e8400-e29b-41d4-a716-446655440000",
+    "text": "Apple Inc. reported Q4 earnings beating expectations with $34.2B revenue, up 5.4% YoY. Strong iPhone sales drove results.",
+    "url": "https://bloomberg.com/news/articles/2024-12-31-apple-earnings-beat",
+    "source": "rss"
+  }
+}
